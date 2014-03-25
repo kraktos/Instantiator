@@ -18,6 +18,7 @@ import java.io.BufferedWriter;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -90,8 +91,6 @@ public class ClientAnnotator {
 
 		Map<String, String> POSTAGGED = new HashMap<String, String>();
 
-		// List<String> sentence = new ArrayList<String>();
-
 		try {
 
 			String articleTitle = null;
@@ -99,6 +98,9 @@ public class ClientAnnotator {
 			String element = null;
 			String posTag = null;
 			Map<String, SpotLinkDao> annotatedSpots;
+			Map<Integer, Integer> spotIndices = new HashMap<Integer, Integer>();
+			int maxCompoundTerm = 0;
+
 			LinkedVector words;
 
 			br = new BufferedReader(new FileReader(TRAIN_FILE));
@@ -121,6 +123,7 @@ public class ClientAnnotator {
 
 					POSTAGGED.put(element, posTag);
 					sBuild.append(element + " ");
+
 				}
 
 				// end of this article reached..mark for annotation
@@ -133,24 +136,30 @@ public class ClientAnnotator {
 					SentenceSplitter sSplitter = new SentenceSplitter(arr1);
 					Sentence[] sentences = sSplitter.splitAll();
 
+					// analyse all on every sentence level
 					for (Sentence sentence : sentences) {
-						// System.out.println("Sentence: " + sentence.text);
+
+						maxCompoundTerm = 0;
+						words = sentence.wordSplit();
 
 						// annotate
 						annotatedSpots = annotate(sentence.text, writer);
 
+						writer.write("===============================\n");
 						for (Entry<String, SpotLinkDao> entry : annotatedSpots
 								.entrySet()) {
-							// writer.write(entry.getKey() + "\t"
-							// + entry.getValue() + "\n");
-						}
 
-						words = sentence.wordSplit();
+							if (entry.getKey().split(" ").length > maxCompoundTerm)
+								maxCompoundTerm = entry.getKey().split(" ").length;
+
+							writer.write(entry.getKey() + "\t"
+									+ entry.getValue() + "\n");
+						}
+						writer.write("===============================\n");
 
 						// go through each word in the sentence, and find its
 						// annotated Wiki Link
 						for (int i = 0; i < words.size(); i++) {
-
 							if (i == 0
 									&& Character.isLetter(words.get(0)
 											.toString().toCharArray()[0]))
@@ -161,8 +170,8 @@ public class ClientAnnotator {
 										+ "\t"
 										+ "BEG"
 										+ "\t"
-										+ annotatedSpots.get(words.get(i)
-												.toString()) + "\n");
+										+ getAnno(annotatedSpots, i, words,
+												maxCompoundTerm) + "\n");
 
 							else if (!Character.isLetter(words.get(i)
 									.toString().toCharArray()[0]))
@@ -172,8 +181,9 @@ public class ClientAnnotator {
 												.get(words.get(i).toString())
 										+ "\t" + "PUNC" + "\n");
 
-							else if (Character.isLetter(words.get(i).toString()
-									.toCharArray()[0]))
+							else if (i != words.size() - 2
+									&& Character.isLetter(words.get(i)
+											.toString().toCharArray()[0]))
 								writer.write(words.get(i).toString()
 										+ "\t"
 										+ POSTAGGED
@@ -181,8 +191,8 @@ public class ClientAnnotator {
 										+ "\t"
 										+ "INT"
 										+ "\t"
-										+ annotatedSpots.get(words.get(i)
-												.toString()) + "\n");
+										+ getAnno(annotatedSpots, i, words,
+												maxCompoundTerm) + "\n");
 
 							else if (i == words.size()
 									&& !Character.isLetter(words.get(0)
@@ -192,10 +202,21 @@ public class ClientAnnotator {
 										+ POSTAGGED
 												.get(words.get(i).toString())
 										+ "\t" + "PUNC" + "\n");
+
+							else if (i == words.size() - 2)
+								writer.write(words.get(i).toString()
+										+ "\t"
+										+ POSTAGGED
+												.get(words.get(i).toString())
+										+ "\t"
+										+ "END"
+										+ "\t"
+										+ annotatedSpots.get(words.get(i)
+												.toString()) + "\n");
 						}
 					}
 
-					if (articleCntr <= 2) {
+					if (articleCntr <= 20) {
 						System.out.println((double) articleCntr * 100 / 178964
 								+ " 	Percent complete.");
 
@@ -203,6 +224,8 @@ public class ClientAnnotator {
 								+ " articles = " + (System.nanoTime() - st)
 								/ FACTOR + " secs..");
 
+					} else {
+						break;
 					}
 					writer.write(sCurrentLine + "\n");
 					writer.flush();
@@ -228,6 +251,30 @@ public class ClientAnnotator {
 			}
 		}
 
+	}
+
+	private static SpotLinkDao getAnno(Map<String, SpotLinkDao> annotatedSpots,
+			int i, LinkedVector words, int maxCompoundTerm) {
+
+		SpotLinkDao returnStr = null;
+		StringBuffer sBuf = new StringBuffer();
+
+		// try direct thing first
+		for (int windwSize = 1; windwSize <= maxCompoundTerm; windwSize++) {
+
+			if (i < words.size()) {
+				sBuf.append(words.get(i).toString() + " ");
+
+				returnStr = annotatedSpots.get(sBuf.toString().trim());
+				if (returnStr != null)
+					break;
+				else {
+					i = i + 1;
+				}
+			}
+		}
+
+		return returnStr;
 	}
 
 	/**
