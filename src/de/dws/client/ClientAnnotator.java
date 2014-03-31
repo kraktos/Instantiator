@@ -242,12 +242,18 @@ public class ClientAnnotator {
 				int m = findArray(bigArr, smallAr);
 				int spotIndxCntr;
 				for (spotIndxCntr = 0; spotIndxCntr < smallAr.length; spotIndxCntr++) {
-					annoFile.write((lineIndex + spotIndxCntr) + "\t");
+					
+					if (spotIndxCntr == 0 || spotIndxCntr == smallAr.length - 1)
+						annoFile.write((lineIndex + spotIndxCntr) + "\t");
+
+					if (smallAr.length == 1)
+						annoFile.write((lineIndex + spotIndxCntr) + "\t");
+					
 					if (spotIndxCntr == 0) {
 						{
 							if (wordsInSentence.get(x) != null) {
 								indexFile.write((lineIndex + spotIndxCntr)
-										+ "\t"
+											+ "\t"
 										+ wordsInSentence.get(x++).toString()
 										+ "\tB\n");
 								// lineIndex++;
