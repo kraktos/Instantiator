@@ -19,6 +19,8 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +46,7 @@ public class ClientAnnotator {
 	private static final String TRAIN_FILE = "/var/work/wiki/en_AllArticles_plaintext.sentSep.sentenceFiltered.txt.treetagger.train";
 	// "/var/work/wiki/sample.train";
 
+	private static final String INDEXED_FILE = "/var/work/wiki/INDEXED_TRAIN.log";
 	private static final String ANNOTATED_FILE = "/var/work/wiki/ANNOTATED_TRAIN.log";
 
 	private static final long FACTOR = 1000000000;
@@ -84,9 +87,12 @@ public class ClientAnnotator {
 		long articleCntr = 0;
 
 		BufferedReader br = null;
-		StringBuilder sBuild = new StringBuilder();
+		StringBuilder article = new StringBuilder();
 
-		BufferedWriter writer = new BufferedWriter(new FileWriter(
+		BufferedWriter indexFile = new BufferedWriter(new FileWriter(
+				INDEXED_FILE));
+
+		BufferedWriter annoFile = new BufferedWriter(new FileWriter(
 				ANNOTATED_FILE));
 
 		Map<String, String> POSTAGGED = new HashMap<String, String>();
@@ -99,20 +105,22 @@ public class ClientAnnotator {
 			String posTag = null;
 			Map<String, SpotLinkDao> annotatedSpots;
 			Map<Integer, Integer> spotIndices = new HashMap<Integer, Integer>();
-			int maxCompoundTerm = 0;
+			// int maxCompoundTerm = 0;
 
-			LinkedVector words;
+			LinkedVector wordsInSentence;
 
 			br = new BufferedReader(new FileReader(TRAIN_FILE));
 
 			long st = System.nanoTime();
+			int lineIndex = 0;
 
 			// go through the full training file
 			while ((sCurrentLine = br.readLine()) != null) {
-
 				// check for beginning of article
 				if (sCurrentLine.indexOf("<article title") != -1) {
-					writer.write(sCurrentLine + "\n");
+					lineIndex = 1;
+					indexFile.write(sCurrentLine + "\n");
+					annoFile.write(sCurrentLine + "\n");
 				}
 
 				// split on one or more tab
@@ -122,8 +130,7 @@ public class ClientAnnotator {
 					posTag = arr[1];
 
 					POSTAGGED.put(element, posTag);
-					sBuild.append(element + " ");
-
+					article.append(element + " ");
 				}
 
 				// end of this article reached..mark for annotation
@@ -131,7 +138,7 @@ public class ClientAnnotator {
 					articleCntr++;
 
 					String[] arr1 = new String[1];
-					arr1[0] = sBuild.toString();
+					arr1[0] = article.toString();
 
 					SentenceSplitter sSplitter = new SentenceSplitter(arr1);
 					Sentence[] sentences = sSplitter.splitAll();
@@ -139,84 +146,32 @@ public class ClientAnnotator {
 					// analyse all on every sentence level
 					for (Sentence sentence : sentences) {
 
-						maxCompoundTerm = 0;
-						words = sentence.wordSplit();
+						// get the words
+						wordsInSentence = sentence.wordSplit();
 
-						// annotate
-						annotatedSpots = annotate(sentence.text, writer);
+						// get the annotations
+						annotatedSpots = annotate(sentence.text);
 
-						writer.write("===============================\n");
-						for (Entry<String, SpotLinkDao> entry : annotatedSpots
-								.entrySet()) {
-
-							if (entry.getKey().split(" ").length > maxCompoundTerm)
-								maxCompoundTerm = entry.getKey().split(" ").length;
-
-							writer.write(entry.getKey() + "\t"
-									+ entry.getValue() + "\n");
-						}
-						writer.write("===============================\n");
+						lineIndex = getIndices2(wordsInSentence,
+								annotatedSpots, annoFile, indexFile, lineIndex);
 
 						// go through each word in the sentence, and find its
 						// annotated Wiki Link
-						for (int i = 0; i < words.size(); i++) {
-							if (i == 0
-									&& Character.isLetter(words.get(0)
-											.toString().toCharArray()[0]))
-								writer.write(words.get(i).toString()
-										+ "\t"
-										+ POSTAGGED
-												.get(words.get(i).toString())
-										+ "\t"
-										+ "BEG"
-										+ "\t"
-										+ getAnno(annotatedSpots, i, words,
-												maxCompoundTerm) + "\n");
+						// for (int i = 0; i < wordsInSentence.size(); i++) {
 
-							else if (!Character.isLetter(words.get(i)
-									.toString().toCharArray()[0]))
-								writer.write(words.get(i).toString()
-										+ "\t"
-										+ POSTAGGED
-												.get(words.get(i).toString())
-										+ "\t" + "PUNC" + "\n");
+						// write to index file
+						// indexFile.write(lineIndex + "\t"
+						// + wordsInSentence.get(i).toString() + "\n");
 
-							else if (i != words.size() - 2
-									&& Character.isLetter(words.get(i)
-											.toString().toCharArray()[0]))
-								writer.write(words.get(i).toString()
-										+ "\t"
-										+ POSTAGGED
-												.get(words.get(i).toString())
-										+ "\t"
-										+ "INT"
-										+ "\t"
-										+ getAnno(annotatedSpots, i, words,
-												maxCompoundTerm) + "\n");
+						// getIndices(i, wordsInSentence, annotatedSpots,
+						// annoFile, indexFile, lineIndex);
+						//
+						// lineIndex++;
 
-							else if (i == words.size()
-									&& !Character.isLetter(words.get(0)
-											.toString().toCharArray()[i]))
-								writer.write(words.get(i).toString()
-										+ "\t"
-										+ POSTAGGED
-												.get(words.get(i).toString())
-										+ "\t" + "PUNC" + "\n");
-
-							else if (i == words.size() - 2)
-								writer.write(words.get(i).toString()
-										+ "\t"
-										+ POSTAGGED
-												.get(words.get(i).toString())
-										+ "\t"
-										+ "END"
-										+ "\t"
-										+ annotatedSpots.get(words.get(i)
-												.toString()) + "\n");
-						}
+						// }
 					}
 
-					if (articleCntr <= 20) {
+					if (articleCntr % 200 == 0 && articleCntr >= 200) {
 						System.out.println((double) articleCntr * 100 / 178964
 								+ " 	Percent complete.");
 
@@ -224,17 +179,20 @@ public class ClientAnnotator {
 								+ " articles = " + (System.nanoTime() - st)
 								/ FACTOR + " secs..");
 
-					} else {
-						break;
 					}
-					writer.write(sCurrentLine + "\n");
-					writer.flush();
+					// else {
+					// break;
+					// }
+					indexFile.write(sCurrentLine + "\n");
+					annoFile.write(sCurrentLine + "\n");
+					indexFile.flush();
+					annoFile.flush();
 
 					// clear the POS tags
 					POSTAGGED.clear();
 
 					// clear full article
-					sBuild = new StringBuilder();
+					article = new StringBuilder();
 				}
 
 			}
@@ -243,11 +201,138 @@ public class ClientAnnotator {
 			e.printStackTrace();
 		} finally {
 			try {
-				writer.close();
+				indexFile.close();
+				annoFile.close();
 				if (br != null)
 					br.close();
 			} catch (IOException ex) {
 				ex.printStackTrace();
+			}
+		}
+
+	}
+
+	public static int findArray(String[] array, String[] subArray) {
+		return Collections.indexOfSubList(Arrays.asList(array),
+				Arrays.asList(subArray));
+	}
+
+	private static int getIndices2(LinkedVector wordsInSentence,
+			Map<String, SpotLinkDao> annotatedSpots, BufferedWriter annoFile,
+			BufferedWriter indexFile, int lineIndex) throws IOException {
+
+		for (int x = 0; x < wordsInSentence.size();) {
+			String spot = null;
+			SpotLinkDao val = null;
+
+			for (Entry<String, SpotLinkDao> entry : annotatedSpots.entrySet()) {
+				if (entry.getKey()
+						.startsWith(wordsInSentence.get(x).toString())) {
+					spot = entry.getKey();
+					val = entry.getValue();
+				}
+			}
+
+			if (spot != null) {
+				String[] smallAr = spot.split(" ");
+				String[] bigArr = new String[wordsInSentence.size()];
+				for (int k = 0; k < wordsInSentence.size(); k++) {
+					bigArr[k] = wordsInSentence.get(k).toString();
+				}
+				int m = findArray(bigArr, smallAr);
+				int spotIndxCntr;
+				for (spotIndxCntr = 0; spotIndxCntr < smallAr.length; spotIndxCntr++) {
+					annoFile.write((lineIndex + spotIndxCntr) + "\t");
+					if (spotIndxCntr == 0) {
+						{
+							if (wordsInSentence.get(x) != null) {
+								indexFile.write((lineIndex + spotIndxCntr)
+										+ "\t"
+										+ wordsInSentence.get(x++).toString()
+										+ "\tB\n");
+								// lineIndex++;
+
+							}
+						}
+					} else {
+						if (wordsInSentence.get(x) != null) {
+							indexFile.write((lineIndex + spotIndxCntr)
+
+							+ "\t" + wordsInSentence.get(x++).toString()
+									+ "\tI\n");
+							// lineIndex++;
+						}
+					}
+				}
+				lineIndex = lineIndex + spotIndxCntr;
+
+				for (spotIndxCntr = 0; spotIndxCntr < smallAr.length; spotIndxCntr++) {
+					annoFile.write(smallAr[spotIndxCntr] + "\t");
+				}
+				annoFile.write(val + "\n");
+				annoFile.flush();
+				indexFile.flush();
+			} else {
+				// write to index file
+				if (wordsInSentence.get(x) != null) {
+					indexFile.write(lineIndex + "\t"
+							+ wordsInSentence.get(x++).toString() + "\tO\n");
+					lineIndex++;
+
+				}
+			}
+
+		}
+
+		return lineIndex;
+	}
+
+	private static void getIndices(int i, LinkedVector wordsInSentence,
+			Map<String, SpotLinkDao> annotatedSpots, BufferedWriter annoFile,
+			BufferedWriter indexFile, int lineIndex) throws IOException {
+
+		boolean flag = false;
+
+		// // write to index file
+		indexFile.write(lineIndex + "\t" + wordsInSentence.get(i).toString()
+				+ "\n");
+
+		for (Entry<String, SpotLinkDao> entry : annotatedSpots.entrySet()) {
+
+			String spot = entry.getKey();
+
+			if (spot.startsWith(wordsInSentence.get(i).toString())) {
+				flag = true;
+
+				SpotLinkDao val = entry.getValue();
+				String[] smallAr = spot.split(" ");
+				String[] bigArr = new String[wordsInSentence.size()];
+				for (int k = 0; k < wordsInSentence.size(); k++) {
+					bigArr[k] = wordsInSentence.get(k).toString();
+				}
+				int m = findArray(bigArr, smallAr);
+				// System.out.println(m);
+				for (int spotIndxCntr = 0; spotIndxCntr < smallAr.length; spotIndxCntr++) {
+					annoFile.write((lineIndex + spotIndxCntr) + "\t");
+				}
+				for (int spotIndxCntr = 0; spotIndxCntr < smallAr.length; spotIndxCntr++) {
+					// if (spotIndxCntr == 0) {
+					// // write to index file
+					// indexFile.write((lineIndex + spotIndxCntr)
+					// + "\t"
+					// + wordsInSentence.get(lineIndex + spotIndxCntr)
+					// .toString() + "\tB\n");
+					// } else {
+					// indexFile.write((lineIndex + spotIndxCntr)
+					// + "\t"
+					// + wordsInSentence.get(lineIndex + spotIndxCntr)
+					// .toString() + "\tI\n");
+					// }
+					annoFile.write(smallAr[spotIndxCntr] + "\t");
+				}
+				annoFile.write(val + "\n");
+				annoFile.flush();
+				indexFile.flush();
 			}
 		}
 
@@ -273,7 +358,6 @@ public class ClientAnnotator {
 				}
 			}
 		}
-
 		return returnStr;
 	}
 
@@ -283,8 +367,8 @@ public class ClientAnnotator {
 	 * @return
 	 * @throws IOException
 	 */
-	private static Map<String, SpotLinkDao> annotate(String test,
-			BufferedWriter writer) throws IOException {
+	private static Map<String, SpotLinkDao> annotate(String test)
+			throws IOException {
 
 		SpotLinkDao dao = null;
 		AnnotatedText ann_text = new AnnotatedText(test);
@@ -310,7 +394,6 @@ public class ClientAnnotator {
 			}
 		}
 
-		writer.flush();
 		return mapSpots;
 	}
 
