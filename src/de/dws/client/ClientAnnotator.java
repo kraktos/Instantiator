@@ -152,6 +152,12 @@ public class ClientAnnotator {
 						// get the annotations
 						annotatedSpots = annotate(sentence.text);
 
+//						for (Entry<String, SpotLinkDao> e : annotatedSpots
+//								.entrySet()) {
+//							System.out
+//									.println(e.getKey() + "\t" + e.getValue());
+//						}
+
 						lineIndex = getIndices2(wordsInSentence,
 								annotatedSpots, annoFile, indexFile, lineIndex);
 
@@ -217,6 +223,27 @@ public class ClientAnnotator {
 				Arrays.asList(subArray));
 	}
 
+	private static boolean scanForFullMatch(String key,
+			LinkedVector wordsInSentence, int x) {
+
+		boolean match = true;
+		int keyLength = 0;
+
+		String[] keyArr = key.split(" ");
+
+		keyLength = key.split(" ").length;
+		for (String k : keyArr) {
+			if (wordsInSentence.get(x) != null) {
+				if (k.equals(wordsInSentence.get(x).toString())) {
+					x++;
+				} else {
+					match = false;
+				}
+			}
+		}
+		return match;
+	}
+
 	private static int getIndices2(LinkedVector wordsInSentence,
 			Map<String, SpotLinkDao> annotatedSpots, BufferedWriter annoFile,
 			BufferedWriter indexFile, int lineIndex) throws IOException {
@@ -225,9 +252,10 @@ public class ClientAnnotator {
 			String spot = null;
 			SpotLinkDao val = null;
 
+			// TODO: bug
 			for (Entry<String, SpotLinkDao> entry : annotatedSpots.entrySet()) {
-				if (entry.getKey()
-						.startsWith(wordsInSentence.get(x).toString())) {
+				// look for full match
+				if (scanForFullMatch(entry.getKey(), wordsInSentence, x)) {
 					spot = entry.getKey();
 					val = entry.getValue();
 				}
@@ -242,18 +270,18 @@ public class ClientAnnotator {
 				int m = findArray(bigArr, smallAr);
 				int spotIndxCntr;
 				for (spotIndxCntr = 0; spotIndxCntr < smallAr.length; spotIndxCntr++) {
-					
+
 					if (spotIndxCntr == 0 || spotIndxCntr == smallAr.length - 1)
 						annoFile.write((lineIndex + spotIndxCntr) + "\t");
 
 					if (smallAr.length == 1)
 						annoFile.write((lineIndex + spotIndxCntr) + "\t");
-					
+
 					if (spotIndxCntr == 0) {
 						{
 							if (wordsInSentence.get(x) != null) {
 								indexFile.write((lineIndex + spotIndxCntr)
-											+ "\t"
+										+ "\t"
 										+ wordsInSentence.get(x++).toString()
 										+ "\tB\n");
 								// lineIndex++;
