@@ -43,7 +43,8 @@ public class ClientAnnotator {
 	// language of choice
 	private static final String LANG = "en";
 
-	private static final String TRAIN_FILE = "/var/work/wiki/en_AllArticles_plaintext.sentSep.sentenceFiltered.txt.treetagger.train";
+	private static final String TRAIN_FILE = "/var/work/wiki/sample.train";
+	// "/var/work/wiki/en_AllArticles_plaintext.sentSep.sentenceFiltered.txt.treetagger.train";
 	// "/var/work/wiki/sample.train";
 
 	private static final String INDEXED_FILE = "/var/work/wiki/INDEXED_TRAIN.log";
@@ -152,11 +153,11 @@ public class ClientAnnotator {
 						// get the annotations
 						annotatedSpots = annotate(sentence.text);
 
-//						for (Entry<String, SpotLinkDao> e : annotatedSpots
-//								.entrySet()) {
-//							System.out
-//									.println(e.getKey() + "\t" + e.getValue());
-//						}
+						// for (Entry<String, SpotLinkDao> e : annotatedSpots
+						// .entrySet()) {
+						// System.out
+						// .println(e.getKey() + "\t" + e.getValue());
+						// }
 
 						lineIndex = getIndices2(wordsInSentence,
 								annotatedSpots, annoFile, indexFile, lineIndex);
@@ -278,26 +279,30 @@ public class ClientAnnotator {
 						annoFile.write((lineIndex + spotIndxCntr) + "\t");
 
 					if (spotIndxCntr == 0) {
-						{
-							if (wordsInSentence.get(x) != null) {
-								indexFile.write((lineIndex + spotIndxCntr)
-										+ "\t"
-										+ wordsInSentence.get(x++).toString()
-										+ "\tB\n");
-								// lineIndex++;
 
-							}
+						if (wordsInSentence.get(x) != null) {
+							indexFile.write((lineIndex + spotIndxCntr) + "\t"
+									+ wordsInSentence.get(x++).toString()
+									+ "\tB\n");
+							// lineIndex++;
+							//lineIndex = lineIndex + 1;
+
 						}
+
 					} else {
 						if (wordsInSentence.get(x) != null) {
 							indexFile.write((lineIndex + spotIndxCntr)
 
 							+ "\t" + wordsInSentence.get(x++).toString()
 									+ "\tI\n");
+//							lineIndex = lineIndex + spotIndxCntr ;
+
 							// lineIndex++;
 						}
 					}
 				}
+
+				// TODO
 				lineIndex = lineIndex + spotIndxCntr;
 
 				for (spotIndxCntr = 0; spotIndxCntr < smallAr.length; spotIndxCntr++) {
