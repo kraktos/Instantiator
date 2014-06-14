@@ -84,6 +84,7 @@ public class ContextSimCompute {
 		String sCurrentLine;
 		String context = null;
 		String[] line = null;
+		Map<String, Long> localMap = new HashMap<String, Long>();
 
 		System.out.println("Creating Feature Keys...");
 		try {
@@ -93,21 +94,29 @@ public class ContextSimCompute {
 				line = sCurrentLine.split("\t");
 				context = line[1];
 
-				// create the feature key list
-				if (!FEATURE_KEYS.contains(context)) {
-					FEATURE_KEYS.add(context);
+				// create the feature key map, since this is way faster than
+				// checking and inserting in a list
+				if (!localMap.containsKey(context)) {
+					localMap.put(context, 1L);
 				}
+			}
+
+			// iterate the map and put it in a List.
+			for (Map.Entry<String, Long> entry : localMap.entrySet()) {
+				FEATURE_KEYS.add(entry.getKey());
 			}
 
 			System.out.println("FEATURE SPACE = " + FEATURE_KEYS.size());
 			System.out.println("Done with creating Feature Keys...");
 
 		} catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
+		} finally {
+			localMap.clear();
+			localMap = null;
+
 		}
 	}
 
