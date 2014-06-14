@@ -68,7 +68,7 @@ public class ContextSimCompute {
 			normalise(CONTEXT_SCORE_FILE);
 		}
 
-		generateFeatureKeys(CONTEXT_SCORE_FILE);
+//		generateFeatureKeys(CONTEXT_SCORE_FILE);
 
 		System.out.println("Creating Feature Matrix from "
 				+ NORMALISED_OUTPUT.toString());
@@ -140,6 +140,11 @@ public class ContextSimCompute {
 				context = line[1];
 				score = Double.parseDouble(line[2]);
 
+				// create the feature key list
+				if (!FEATURE_KEYS.containsKey(context)) {
+					FEATURE_KEYS.put(context, 1L);
+				}
+				
 				if (!set.contains(entity.toUpperCase())) {
 					outputFile.write(LINEBREAKER + "\n");
 					set.add(entity.toUpperCase());
@@ -260,6 +265,7 @@ public class ContextSimCompute {
 		BufferedWriter outputFile = new BufferedWriter(new FileWriter(
 				ENTITY_SIM_SCORES));
 
+		System.out.println("Writing Entity Similarity scores at " + ENTITY_SIM_SCORES);
 		for (Entry<String, MutableSparseVector> outer : ENTITY_FEATURE_GLOBAL_MATRIX
 				.entrySet()) {
 			for (Entry<String, MutableSparseVector> inner : ENTITY_FEATURE_GLOBAL_MATRIX
@@ -279,5 +285,7 @@ public class ContextSimCompute {
 		}
 
 		outputFile.close();
+		System.out.println("Processing Completed");
+
 	}
 }
