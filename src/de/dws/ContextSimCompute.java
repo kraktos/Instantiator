@@ -9,10 +9,8 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.ArrayList; 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -23,7 +21,7 @@ import org.grouplens.lenskit.vectors.similarity.CosineVectorSimilarity;
 /**
  * @author adutta
  * 
- *         class used to analyse the contexts of entities, compute similarities
+ *         class used to analyze the contexts of entities, compute similarities
  *         between entities based on contexts
  * 
  */
@@ -44,7 +42,7 @@ public class ContextSimCompute {
 	 */
 	private static final String ENTITY_SIM_SCORES = "/var/work/wiki/simScores";
 
-	private static List<String> FEATURE_KEYS;
+	private static Map<String, Long> FEATURE_KEYS = new HashMap<String, Long>();
 
 	static boolean alreadyNormalised = false;
 
@@ -55,24 +53,58 @@ public class ContextSimCompute {
 	 */
 	private static final long FACTOR = 1000000000;
 
-	private static final long BATCH = 100000;
+	private static final long BATCH = 1000000;
 
 	private static final String LINEBREAKER = "~~~~";
 
 	/**
 	 * @param args
+	 * @throws IOException
 	 */
-	public static void main(String[] args) {
+	public static void main(String[] args) throws IOException {
 
 		if (!alreadyNormalised) {
 			System.out.println("Normalising" + CONTEXT_SCORE_FILE.toString());
 			normalise(CONTEXT_SCORE_FILE);
 		}
 
+		generateFeatureKeys(CONTEXT_SCORE_FILE);
+
 		System.out.println("Creating Feature Matrix from "
 				+ NORMALISED_OUTPUT.toString());
 		loadContexts(NORMALISED_OUTPUT);
 
+	}
+
+	private static void generateFeatureKeys(String contextScoreFile) {
+
+		BufferedReader br = null;
+		String sCurrentLine;
+		String context = null;
+		String[] line = null;
+
+		System.out.println("Creating Feature Keys...");
+		try {
+			br = new BufferedReader(new FileReader(contextScoreFile));
+
+			while ((sCurrentLine = br.readLine()) != null) {
+				line = sCurrentLine.split("\t");
+				context = line[1];
+
+				// create the feature key list
+				if (!FEATURE_KEYS.containsKey(context)) {
+					FEATURE_KEYS.put(context, 1L);
+				}
+			}
+			System.out.println("Done with creating Feature Keys...");
+
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 
 	/**
@@ -92,8 +124,6 @@ public class ContextSimCompute {
 		HashSet<String> set = null;
 		double maxValue = 0;
 
-		FEATURE_KEYS = new ArrayList<String>();
-
 		try {
 
 			set = new HashSet<String>();
@@ -110,10 +140,6 @@ public class ContextSimCompute {
 				context = line[1];
 				score = Double.parseDouble(line[2]);
 
-				// create the feature key list
-				if (!FEATURE_KEYS.contains(context)) {
-					FEATURE_KEYS.add(context);
-				}
 				if (!set.contains(entity.toUpperCase())) {
 					outputFile.write(LINEBREAKER + "\n");
 					set.add(entity.toUpperCase());
@@ -179,8 +205,7 @@ public class ContextSimCompute {
 					normScore = Double.parseDouble(line[2]);
 
 					// put the feature id and feature score
-					vector.put((long) FEATURE_KEYS.indexOf(contextFeature),
-							normScore);
+					vector.put(FEATURE_KEYS.get(contextFeature), normScore);
 
 					if (lineCntr % BATCH == 0 && lineCntr > BATCH)
 						System.out.println("Time to create Matrix = "
