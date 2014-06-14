@@ -44,7 +44,7 @@ public class ContextSimCompute {
 	 */
 	private static final String ENTITY_SIM_SCORES = "/var/work/wiki/simScores";
 
-	private static List<String> FEATURE_KEYS = new ArrayList<String>();
+	private static Map<String, Long> FEATURE_KEYS = new HashMap<String, Long>();
 
 	static boolean alreadyNormalised = false;
 
@@ -84,11 +84,11 @@ public class ContextSimCompute {
 		String sCurrentLine;
 		String context = null;
 		String[] line = null;
-		Map<String, Long> localMap = new HashMap<String, Long>();
 
 		System.out.println("Creating Feature Keys...");
 		try {
 			br = new BufferedReader(new FileReader(contextScoreFile));
+			long pos = 0;
 
 			while ((sCurrentLine = br.readLine()) != null) {
 				line = sCurrentLine.split("\t");
@@ -96,14 +96,10 @@ public class ContextSimCompute {
 
 				// create the feature key map, since this is way faster than
 				// checking and inserting in a list
-				if (!localMap.containsKey(context)) {
-					localMap.put(context, 1L);
+				if (!FEATURE_KEYS.containsKey(context)) {
+					FEATURE_KEYS.put(context, pos);
+					pos++;
 				}
-			}
-
-			// iterate the map and put it in a List.
-			for (Map.Entry<String, Long> entry : localMap.entrySet()) {
-				FEATURE_KEYS.add(entry.getKey());
 			}
 
 			System.out.println("FEATURE SPACE = " + FEATURE_KEYS.size());
@@ -113,10 +109,6 @@ public class ContextSimCompute {
 			e.printStackTrace();
 		} catch (IOException e) {
 			e.printStackTrace();
-		} finally {
-			localMap.clear();
-			localMap = null;
-
 		}
 	}
 
@@ -217,8 +209,15 @@ public class ContextSimCompute {
 					normScore = Double.parseDouble(line[2]);
 
 					// put the feature id and feature score
-					vector.put((long) FEATURE_KEYS.indexOf(contextFeature),
+					vector.put((long) FEATURE_KEYS.get(contextFeature),
 							normScore);
+
+					if (lineCntr % BATCH == 0 && lineCntr > BATCH) {
+						System.out.println("Time to create matrix = "
+								+ lineCntr + " lines	 = "
+								+ (System.nanoTime() - start) / FACTOR
+								+ " secds..");
+					}
 
 				} else {
 
@@ -233,11 +232,6 @@ public class ContextSimCompute {
 					vector = new HashMap<Long, Double>();
 				}
 
-				if (lineCntr % BATCH == 0 && lineCntr > BATCH) {
-					System.out.println("Time to create matrix = " + lineCntr
-							+ " lines	 = " + (System.nanoTime() - start)
-							/ FACTOR + " secds..");
-				}
 			}
 
 			// once loaded, find pairwise entity similarity
