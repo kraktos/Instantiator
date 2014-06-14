@@ -9,8 +9,10 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -42,7 +44,7 @@ public class ContextSimCompute {
 	 */
 	private static final String ENTITY_SIM_SCORES = "/var/work/wiki/simScores";
 
-	private static Map<String, Long> FEATURE_KEYS = new HashMap<String, Long>();
+	private static List<String> FEATURE_KEYS = new ArrayList<String>();
 
 	static boolean alreadyNormalised = false;
 
@@ -68,12 +70,45 @@ public class ContextSimCompute {
 			normalise(CONTEXT_SCORE_FILE);
 		}
 
-		// generateFeatureKeys(CONTEXT_SCORE_FILE);
+		generateFeatureKeys(CONTEXT_SCORE_FILE);
 
 		System.out.println("Creating Feature Matrix from "
 				+ NORMALISED_OUTPUT.toString());
 		loadContexts(NORMALISED_OUTPUT);
 
+	}
+
+	private static void generateFeatureKeys(String contextScoreFile) {
+
+		BufferedReader br = null;
+		String sCurrentLine;
+		String context = null;
+		String[] line = null;
+
+		System.out.println("Creating Feature Keys...");
+		try {
+			br = new BufferedReader(new FileReader(contextScoreFile));
+
+			while ((sCurrentLine = br.readLine()) != null) {
+				line = sCurrentLine.split("\t");
+				context = line[1];
+
+				// create the feature key list
+				if (!FEATURE_KEYS.contains(context)) {
+					FEATURE_KEYS.add(context);
+				}
+			}
+
+			System.out.println("FEATURE SPACE = " + FEATURE_KEYS.size());
+			System.out.println("Done with creating Feature Keys...");
+
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 
 	/**
@@ -109,11 +144,6 @@ public class ContextSimCompute {
 				context = line[1];
 				score = Double.parseDouble(line[2]);
 
-				// create the feature key list
-				if (!FEATURE_KEYS.containsKey(context)) {
-					FEATURE_KEYS.put(context, 1L);
-				}
-
 				if (!set.contains(entity.toUpperCase())) {
 					outputFile.write(LINEBREAKER + "\n");
 					set.add(entity.toUpperCase());
@@ -130,7 +160,6 @@ public class ContextSimCompute {
 				}
 			}
 
-			System.out.println("FEATURE SPACE = " + FEATURE_KEYS.size());
 			outputFile.close();
 
 		} catch (FileNotFoundException e) {
@@ -179,7 +208,8 @@ public class ContextSimCompute {
 					normScore = Double.parseDouble(line[2]);
 
 					// put the feature id and feature score
-					vector.put(FEATURE_KEYS.get(contextFeature), normScore);
+					vector.put((long) FEATURE_KEYS.indexOf(contextFeature),
+							normScore);
 
 				} else {
 
@@ -223,6 +253,7 @@ public class ContextSimCompute {
 
 		SparseVector entVector1 = null;
 		SparseVector entVector2 = null;
+		double score = 0;
 
 		CosineVectorSimilarity cosineSim = new CosineVectorSimilarity();
 
@@ -231,19 +262,22 @@ public class ContextSimCompute {
 
 		System.out.println("Writing Entity Similarity scores at "
 				+ ENTITY_SIM_SCORES);
+
 		for (Entry<String, MutableSparseVector> outer : ENTITY_FEATURE_GLOBAL_MATRIX
 				.entrySet()) {
 			for (Entry<String, MutableSparseVector> inner : ENTITY_FEATURE_GLOBAL_MATRIX
 					.entrySet()) {
 
-				entVector1 = outer.getValue();
-				entVector2 = inner.getValue();
+				if (outer.getKey() != inner.getKey()) {
+					entVector1 = outer.getValue();
+					entVector2 = inner.getValue();
 
-				if (entVector1 != null && entVector2 != null)
-					outputFile.write(outer.getKey() + "\t" + inner.getKey()
-							+ "\t"
-							+ cosineSim.similarity(entVector1, entVector2)
-							+ "\n");
+					score = cosineSim.similarity(entVector1, entVector2);
+
+					if (score > 0.0 && entVector1 != null && entVector2 != null)
+						outputFile.write(outer.getKey() + "\t" + inner.getKey()
+								+ "\t" + score + "\n");
+				}
 			}
 
 			outputFile.flush();
