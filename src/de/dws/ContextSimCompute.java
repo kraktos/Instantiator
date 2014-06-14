@@ -9,10 +9,8 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -268,10 +266,14 @@ public class ContextSimCompute {
 
 		for (Entry<String, MutableSparseVector> outer : ENTITY_FEATURE_GLOBAL_MATRIX
 				.entrySet()) {
+
+			int hashOuter = System.identityHashCode(outer.getKey());
+
 			for (Entry<String, MutableSparseVector> inner : ENTITY_FEATURE_GLOBAL_MATRIX
 					.entrySet()) {
 
-				if (outer.getKey() != inner.getKey()) {
+				if (hashOuter > System.identityHashCode(inner.getKey())) {
+
 					entVector1 = outer.getValue();
 					entVector2 = inner.getValue();
 
