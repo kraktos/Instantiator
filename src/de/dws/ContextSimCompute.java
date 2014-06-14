@@ -11,6 +11,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -264,27 +265,47 @@ public class ContextSimCompute {
 		System.out.println("Writing Entity Similarity scores at "
 				+ ENTITY_SIM_SCORES);
 
-		for (Entry<String, MutableSparseVector> outer : ENTITY_FEATURE_GLOBAL_MATRIX
-				.entrySet()) {
+		System.out.println(ENTITY_FEATURE_GLOBAL_MATRIX.size());
 
-			int hashOuter = System.identityHashCode(outer.getKey());
+		int hashOuter = 0;
 
-			for (Entry<String, MutableSparseVector> inner : ENTITY_FEATURE_GLOBAL_MATRIX
-					.entrySet()) {
+		long start = System.nanoTime();
 
-				if (hashOuter > System.identityHashCode(inner.getKey())) {
+		// 2071017
 
-					entVector1 = outer.getValue();
-					entVector2 = inner.getValue();
+		Iterator<Entry<String, MutableSparseVector>> it1 = ENTITY_FEATURE_GLOBAL_MATRIX
+				.entrySet().iterator();
+
+		Iterator<Entry<String, MutableSparseVector>> it2 = ENTITY_FEATURE_GLOBAL_MATRIX
+				.entrySet().iterator();
+
+		Entry<String, MutableSparseVector> entry1;
+		Entry<String, MutableSparseVector> entry2;
+		int hash1 = 0;
+		int hash2 = 0;
+
+		while (it1.hasNext()) {
+			entry1 = it1.next();
+			hash1 = System.identityHashCode(entry1.getKey());
+
+			while (it2.hasNext()) {
+				entry2 = it2.next();
+				hash2 = System.identityHashCode(entry2.getKey());
+				if (hash1 > hash2) {
+					entVector1 = entry1.getValue();
+					entVector2 = entry2.getValue();
 
 					score = cosineSim.similarity(entVector1, entVector2);
 
-					if (score > 0.0 && entVector1 != null && entVector2 != null)
-						outputFile.write(outer.getKey() + "\t" + inner.getKey()
-								+ "\t" + score + "\n");
+					if (score > 0.0 && entVector1 != null && entVector2 != null) {
+						outputFile.write(entry1.getKey() + "\t"
+								+ entry2.getKey() + "\t" + score + "\n");
+
+						it1.remove();
+						it2.remove();
+					}
 				}
 			}
-
 			outputFile.flush();
 		}
 
