@@ -14,6 +14,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.grouplens.lenskit.vectors.MutableSparseVector;
 import org.grouplens.lenskit.vectors.SparseVector;
@@ -48,6 +49,7 @@ public class ContextSimCompute {
 	static boolean alreadyNormalised = false;
 
 	private static Map<String, MutableSparseVector> ENTITY_FEATURE_GLOBAL_MATRIX = null;
+	private static Map<String, MutableSparseVector> ENTITY_FEATURE_GLOBAL_MATRIX2 = null;
 
 	/**
 	 * for nano secds of time
@@ -197,7 +199,7 @@ public class ContextSimCompute {
 			br = new BufferedReader(new FileReader(contextScoreFile));
 			long start = System.nanoTime();
 
-			ENTITY_FEATURE_GLOBAL_MATRIX = new HashMap<String, MutableSparseVector>();
+			ENTITY_FEATURE_GLOBAL_MATRIX = new ConcurrentHashMap<String, MutableSparseVector>();
 
 			while ((sCurrentLine = br.readLine()) != null) {
 				if (!sCurrentLine.equals(LINEBREAKER)) {
@@ -272,12 +274,15 @@ public class ContextSimCompute {
 		long start = System.nanoTime();
 
 		// 2071017
+		ENTITY_FEATURE_GLOBAL_MATRIX2 = new ConcurrentHashMap<String, MutableSparseVector>();
 
+		for (Entry<String, MutableSparseVector> ent : ENTITY_FEATURE_GLOBAL_MATRIX
+				.entrySet()) {
+			ENTITY_FEATURE_GLOBAL_MATRIX2.put(ent.getKey(), ent.getValue());
+		}
 		Iterator<Entry<String, MutableSparseVector>> it1 = ENTITY_FEATURE_GLOBAL_MATRIX
 				.entrySet().iterator();
-
-		Iterator<Entry<String, MutableSparseVector>> it2 = ENTITY_FEATURE_GLOBAL_MATRIX
-				.entrySet().iterator();
+		Iterator<Entry<String, MutableSparseVector>> it2;
 
 		Entry<String, MutableSparseVector> entry1;
 		Entry<String, MutableSparseVector> entry2;
@@ -287,6 +292,12 @@ public class ContextSimCompute {
 		while (it1.hasNext()) {
 			entry1 = it1.next();
 			hash1 = System.identityHashCode(entry1.getKey());
+
+			it2 = ENTITY_FEATURE_GLOBAL_MATRIX2.entrySet().iterator();
+
+//			System.out.println("MAP1 = " + ENTITY_FEATURE_GLOBAL_MATRIX.size());
+//
+//			System.out.println("map2 = " + ENTITY_FEATURE_GLOBAL_MATRIX2.size());
 
 			while (it2.hasNext()) {
 				entry2 = it2.next();
@@ -301,8 +312,9 @@ public class ContextSimCompute {
 						outputFile.write(entry1.getKey() + "\t"
 								+ entry2.getKey() + "\t" + score + "\n");
 
-						it1.remove();
 						it2.remove();
+						ENTITY_FEATURE_GLOBAL_MATRIX.remove(entry2.getKey());
+
 					}
 				}
 			}
