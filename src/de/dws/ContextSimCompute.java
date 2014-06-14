@@ -68,43 +68,12 @@ public class ContextSimCompute {
 			normalise(CONTEXT_SCORE_FILE);
 		}
 
-//		generateFeatureKeys(CONTEXT_SCORE_FILE);
+		// generateFeatureKeys(CONTEXT_SCORE_FILE);
 
 		System.out.println("Creating Feature Matrix from "
 				+ NORMALISED_OUTPUT.toString());
 		loadContexts(NORMALISED_OUTPUT);
 
-	}
-
-	private static void generateFeatureKeys(String contextScoreFile) {
-
-		BufferedReader br = null;
-		String sCurrentLine;
-		String context = null;
-		String[] line = null;
-
-		System.out.println("Creating Feature Keys...");
-		try {
-			br = new BufferedReader(new FileReader(contextScoreFile));
-
-			while ((sCurrentLine = br.readLine()) != null) {
-				line = sCurrentLine.split("\t");
-				context = line[1];
-
-				// create the feature key list
-				if (!FEATURE_KEYS.containsKey(context)) {
-					FEATURE_KEYS.put(context, 1L);
-				}
-			}
-			System.out.println("Done with creating Feature Keys...");
-
-		} catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
 	}
 
 	/**
@@ -144,7 +113,7 @@ public class ContextSimCompute {
 				if (!FEATURE_KEYS.containsKey(context)) {
 					FEATURE_KEYS.put(context, 1L);
 				}
-				
+
 				if (!set.contains(entity.toUpperCase())) {
 					outputFile.write(LINEBREAKER + "\n");
 					set.add(entity.toUpperCase());
@@ -212,11 +181,6 @@ public class ContextSimCompute {
 					// put the feature id and feature score
 					vector.put(FEATURE_KEYS.get(contextFeature), normScore);
 
-					if (lineCntr % BATCH == 0 && lineCntr > BATCH)
-						System.out.println("Time to create Matrix = "
-								+ lineCntr + " lines	 = "
-								+ (System.nanoTime() - start) / FACTOR
-								+ " secds..");
 				} else {
 
 					if (vector != null
@@ -265,7 +229,8 @@ public class ContextSimCompute {
 		BufferedWriter outputFile = new BufferedWriter(new FileWriter(
 				ENTITY_SIM_SCORES));
 
-		System.out.println("Writing Entity Similarity scores at " + ENTITY_SIM_SCORES);
+		System.out.println("Writing Entity Similarity scores at "
+				+ ENTITY_SIM_SCORES);
 		for (Entry<String, MutableSparseVector> outer : ENTITY_FEATURE_GLOBAL_MATRIX
 				.entrySet()) {
 			for (Entry<String, MutableSparseVector> inner : ENTITY_FEATURE_GLOBAL_MATRIX
