@@ -11,7 +11,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
@@ -49,7 +48,6 @@ public class ContextSimCompute {
 	static boolean alreadyNormalised = false;
 
 	private static Map<String, MutableSparseVector> ENTITY_FEATURE_GLOBAL_MATRIX = null;
-	private static Map<String, MutableSparseVector> ENTITY_FEATURE_GLOBAL_MATRIX2 = null;
 
 	/**
 	 * for nano secds of time
@@ -261,6 +259,11 @@ public class ContextSimCompute {
 
 		CosineVectorSimilarity cosineSim = new CosineVectorSimilarity();
 
+		int hash1 = 0;
+		int hash2 = 0;
+
+		int productCntr = 0;
+
 		BufferedWriter outputFile = new BufferedWriter(new FileWriter(
 				ENTITY_SIM_SCORES));
 
@@ -269,59 +272,104 @@ public class ContextSimCompute {
 
 		System.out.println(ENTITY_FEATURE_GLOBAL_MATRIX.size());
 
-		int hashOuter = 0;
-
 		long start = System.nanoTime();
 
-		// 2071017
-		ENTITY_FEATURE_GLOBAL_MATRIX2 = new ConcurrentHashMap<String, MutableSparseVector>();
-
-		for (Entry<String, MutableSparseVector> ent : ENTITY_FEATURE_GLOBAL_MATRIX
+		for (Entry<String, MutableSparseVector> entry1 : ENTITY_FEATURE_GLOBAL_MATRIX
 				.entrySet()) {
-			ENTITY_FEATURE_GLOBAL_MATRIX2.put(ent.getKey(), ent.getValue());
-		}
-		Iterator<Entry<String, MutableSparseVector>> it1 = ENTITY_FEATURE_GLOBAL_MATRIX
-				.entrySet().iterator();
-		Iterator<Entry<String, MutableSparseVector>> it2;
 
-		Entry<String, MutableSparseVector> entry1;
-		Entry<String, MutableSparseVector> entry2;
-		int hash1 = 0;
-		int hash2 = 0;
-
-		while (it1.hasNext()) {
-			entry1 = it1.next();
 			hash1 = System.identityHashCode(entry1.getKey());
+			entVector1 = entry1.getValue();
 
-			it2 = ENTITY_FEATURE_GLOBAL_MATRIX2.entrySet().iterator();
-
-//			System.out.println("MAP1 = " + ENTITY_FEATURE_GLOBAL_MATRIX.size());
-//
-//			System.out.println("map2 = " + ENTITY_FEATURE_GLOBAL_MATRIX2.size());
-
-			while (it2.hasNext()) {
-				entry2 = it2.next();
+			for (Entry<String, MutableSparseVector> entry2 : ENTITY_FEATURE_GLOBAL_MATRIX
+					.entrySet()) {
+				productCntr++;
 				hash2 = System.identityHashCode(entry2.getKey());
 				if (hash1 > hash2) {
-					entVector1 = entry1.getValue();
+
 					entVector2 = entry2.getValue();
 
 					score = cosineSim.similarity(entVector1, entVector2);
-
-					if (score > 0.0 && entVector1 != null && entVector2 != null) {
+					if (score > 0)
 						outputFile.write(entry1.getKey() + "\t"
 								+ entry2.getKey() + "\t" + score + "\n");
 
-						it2.remove();
-						ENTITY_FEATURE_GLOBAL_MATRIX.remove(entry2.getKey());
+					if (productCntr % 10000000 == 0 && productCntr > 10000000) {
+						outputFile.flush();
 
+						System.out.println(productCntr + "\t"
+								+ (System.nanoTime() - start) / FACTOR);
 					}
 				}
 			}
-			outputFile.flush();
 		}
 
 		outputFile.close();
+
+		// 2071017
+		// ENTITY_FEATURE_GLOBAL_MATRIX2 = new ConcurrentHashMap<String,
+		// MutableSparseVector>();
+		//
+		// for (Entry<String, MutableSparseVector> ent :
+		// ENTITY_FEATURE_GLOBAL_MATRIX
+		// .entrySet()) {
+		// ENTITY_FEATURE_GLOBAL_MATRIX2.put(ent.getKey(), ent.getValue());
+		// }
+		// Iterator<Entry<String, MutableSparseVector>> it1 =
+		// ENTITY_FEATURE_GLOBAL_MATRIX
+		// .entrySet().iterator();
+		// Iterator<Entry<String, MutableSparseVector>> it2;
+		//
+		// Entry<String, MutableSparseVector> entry1;
+		// Entry<String, MutableSparseVector> entry2;
+		//
+		// while (it1.hasNext()) {
+		// entry1 = it1.next();
+		// entVector1 = entry1.getValue();
+		// hash1 = System.identityHashCode(entry1.getKey());
+		//
+		// it2 = ENTITY_FEATURE_GLOBAL_MATRIX2.entrySet().iterator();
+		// isAlone = true;
+		// System.out.println("MAP1 = " + ENTITY_FEATURE_GLOBAL_MATRIX.size());
+		// System.out
+		// .println("MAP2 = " + ENTITY_FEATURE_GLOBAL_MATRIX2.size());
+		//
+		// while (it2.hasNext()) {
+		// entry2 = it2.next();
+		// hash2 = System.identityHashCode(entry2.getKey());
+		// if (hash1 > hash2) {
+		//
+		// entVector2 = entry2.getValue();
+		//
+		// score = cosineSim.similarity(entVector1, entVector2);
+		// productCntr++;
+		// if (productCntr % 10000000 == 0 && productCntr > 10000000)
+		// System.out.println(productCntr + "\t"
+		// + (System.nanoTime() - start) / FACTOR);
+		//
+		// if (score > 0)
+		// isAlone = false;
+		//
+		// // if (score > 0.0) {
+		// // outputFile.write(entry1.getKey() + "\t"
+		// // + entry2.getKey() + "\t" + score + "\n");
+		//
+		// // }else{
+		// //
+		// // }
+		//
+		// // it2.remove();
+		// // ENTITY_FEATURE_GLOBAL_MATRIX.remove(entry2.getKey());
+		//
+		// }
+		// }
+		//
+		// if (isAlone) {
+		// it1.remove();
+		// ENTITY_FEATURE_GLOBAL_MATRIX2.remove(entry1.getKey());
+		// }
+		//
+		// }
+
 		System.out.println("Processing Completed");
 
 	}
