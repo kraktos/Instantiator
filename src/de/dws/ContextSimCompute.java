@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Scanner;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.grouplens.lenskit.vectors.MutableSparseVector;
@@ -62,11 +63,11 @@ public class ContextSimCompute {
 	 */
 	private static final long FACTOR = 1000000000;
 
-	private static final long BATCH = 1000000;
+	private static final long BATCH = 5000000;
 
 	private static final String LINEBREAKER = "~~~~";
 
-	private static final int TOPK = 5;
+	private static final int TOPK = 10;
 
 	/**
 	 * @param args
@@ -93,10 +94,16 @@ public class ContextSimCompute {
 		// query now
 		BufferedReader console = new BufferedReader(new InputStreamReader(
 				System.in));
+		Map<String, Double> resultTopK = null;
 		while (true) {
 			String scan = console.readLine().trim().toUpperCase();
 			if (!scan.equals("Q")) {
-				findTopKSimilarEntities(scan);
+				resultTopK = findTopKSimilarEntities(scan);
+				if (resultTopK != null) {
+					for (Entry<String, Double> e : resultTopK.entrySet()) {
+						System.out.println(e.getKey() + "\t" + e.getValue());
+					}
+				}
 			} else {
 				System.exit(1);
 			}
@@ -277,14 +284,14 @@ public class ContextSimCompute {
 	 * 
 	 * @throws IOException
 	 */
-	private static void findTopKSimilarEntities(String queryEntity)
-			throws IOException {
+	private static Map<String, Double> findTopKSimilarEntities(
+			String queryEntity) throws IOException {
 
 		SparseVector entVector1 = null;
 		SparseVector entVector2 = null;
 		double score = 0;
 
-		Map<String, Double> resultTopK = new HashMap<String, Double>();
+		Map<String, Double> resultTopK = new TreeMap<String, Double>();
 
 		CosineVectorSimilarity cosineSim = new CosineVectorSimilarity();
 
@@ -294,6 +301,9 @@ public class ContextSimCompute {
 		entVector1 = ENTITY_FEATURE_GLOBAL_MATRIX
 				.get(queryEntity.toUpperCase());
 
+		if (entVector1 == null) {
+			return null;
+		}
 		for (Entry<String, MutableSparseVector> entry2 : ENTITY_FEATURE_GLOBAL_MATRIX
 				.entrySet()) {
 
@@ -306,11 +316,7 @@ public class ContextSimCompute {
 			}
 		}
 
-		resultTopK = sortByValue(resultTopK);
-
-		for (Entry<String, Double> e : resultTopK.entrySet()) {
-			System.out.println(e.getKey() + "\t" + e.getValue());
-		}
+		return sortByValue(resultTopK);
 
 	}
 
