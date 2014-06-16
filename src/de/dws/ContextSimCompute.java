@@ -5,6 +5,7 @@ package de.dws;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -20,7 +21,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Scanner;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -40,12 +40,12 @@ public class ContextSimCompute {
 	/**
 	 * path where the context scores for each entity are scored
 	 */
-	private static final String CONTEXT_SCORE_FILE = "/var/work/wiki/sorted"; // wiki_1000_ContextScores";
+	private static final String CONTEXT_SCORE_FILE = "sorted"; // wiki_1000_ContextScores";
 
 	/**
 	 * path of the normalised input file
 	 */
-	private static final String NORMALISED_OUTPUT = "/var/work/wiki/normalised";
+	private static final String NORMALISED_OUTPUT = "normalised";
 
 	/**
 	 * path of the final entity vs entity cosine similarity scores
@@ -74,39 +74,76 @@ public class ContextSimCompute {
 	 * @throws IOException
 	 */
 	public static void main(String[] args) throws IOException {
+		String filePath = null;
 
-		if (!alreadyNormalised) {
-			System.out.println("Normalising" + CONTEXT_SCORE_FILE.toString());
-			normalise(CONTEXT_SCORE_FILE);
-		}
+		if (args.length == 1) {
+			filePath = args[0];
 
-		generateFeatureKeys(CONTEXT_SCORE_FILE);
+			File file = new File(filePath);
+			String dir = file.getParent();
 
-		System.out.println("Creating Feature Matrix from "
-				+ NORMALISED_OUTPUT.toString());
-		loadContexts(NORMALISED_OUTPUT);
+			// runCommands(filePath, dir);
 
-		// once loaded, find pairwise entity similarity
-		// findContextSimilarityScore();
-
-		System.out.println("Enter your query term. Press 'q' to quit entering");
-
-		// query now
-		BufferedReader console = new BufferedReader(new InputStreamReader(
-				System.in));
-		Map<String, Double> resultTopK = null;
-		while (true) {
-			String scan = console.readLine().trim().toUpperCase();
-			if (!scan.equals("Q")) {
-				resultTopK = findTopKSimilarEntities(scan);
-				if (resultTopK != null) {
-					for (Entry<String, Double> e : resultTopK.entrySet()) {
-						System.out.println(e.getKey() + "\t" + e.getValue());
-					}
-				}
-			} else {
-				System.exit(1);
+			if (!alreadyNormalised) {
+				System.out.println("Normalising" + filePath.toString());
+				normalise(dir);
 			}
+
+			generateFeatureKeys(filePath);
+
+			System.out.println("Creating Feature Matrix from "
+					+ NORMALISED_OUTPUT.toString());
+			loadContexts(dir + "/" + NORMALISED_OUTPUT);
+
+			// once loaded, find pairwise entity similarity
+			// findContextSimilarityScore();
+
+			System.out
+					.println("Enter your query term. Press 'q' to quit entering");
+
+			// query now
+			BufferedReader console = new BufferedReader(new InputStreamReader(
+					System.in));
+			Map<String, Double> resultTopK = null;
+			while (true) {
+				String scan = console.readLine().trim().toUpperCase();
+				if (!scan.equals("Q")) {
+					resultTopK = findTopKSimilarEntities(scan);
+					if (resultTopK != null) {
+						for (Entry<String, Double> e : resultTopK.entrySet()) {
+							System.out
+									.println(e.getKey() + "\t" + e.getValue());
+						}
+						System.out.println();
+					}
+				} else {
+					System.exit(1);
+				}
+			}
+		} else {
+			System.err.println("add input file path...");
+			System.err
+					.println("Usage: java -Xmx20G -jar entitySimInteractive.jar  <path>");
+		}
+	}
+
+	private static void runCommands(String file, String dir) {
+
+		try {
+			System.out.println("Running soring and preprocessing of " + file);
+			Runtime runTime = Runtime.getRuntime();
+			Process process = runTime.exec("sed \'s/ /_/g\' " + file + " > "
+					+ dir + "/temp");
+			process.waitFor();
+
+			process = runTime.exec("sort -k1,1 -k3,3rn temp > " + dir + "/"
+					+ CONTEXT_SCORE_FILE);
+			process.waitFor();
+
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
 		}
 
 	}
@@ -150,7 +187,7 @@ public class ContextSimCompute {
 	 * 
 	 * @param contextScoreFile
 	 */
-	private static void normalise(String contextScoreFile) {
+	private static void normalise(String contextScoreFileDir) {
 
 		BufferedReader br = null;
 		String sCurrentLine;
@@ -165,11 +202,12 @@ public class ContextSimCompute {
 		try {
 
 			set = new HashSet<String>();
-			br = new BufferedReader(new FileReader(contextScoreFile));
+			br = new BufferedReader(new FileReader(contextScoreFileDir + "/"
+					+ CONTEXT_SCORE_FILE));
 			long start = System.nanoTime();
 
 			BufferedWriter outputFile = new BufferedWriter(new FileWriter(
-					NORMALISED_OUTPUT));
+					contextScoreFileDir + "/" + NORMALISED_OUTPUT));
 
 			while ((sCurrentLine = br.readLine()) != null) {
 				lineCntr++;
@@ -295,11 +333,12 @@ public class ContextSimCompute {
 
 		CosineVectorSimilarity cosineSim = new CosineVectorSimilarity();
 
-		System.out.println("**** Top-5 similar items for " + queryEntity
+		System.out.println("**** Top-10 similar items for " + queryEntity
 				+ "*******\n");
 
-		entVector1 = ENTITY_FEATURE_GLOBAL_MATRIX
-				.get(queryEntity.toUpperCase());
+		queryEntity = queryEntity.replaceAll(" ", "_").toUpperCase();
+
+		entVector1 = ENTITY_FEATURE_GLOBAL_MATRIX.get(queryEntity);
 
 		if (entVector1 == null) {
 			return null;
