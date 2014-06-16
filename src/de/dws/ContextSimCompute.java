@@ -9,10 +9,18 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Scanner;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.grouplens.lenskit.vectors.MutableSparseVector;
@@ -58,6 +66,8 @@ public class ContextSimCompute {
 
 	private static final String LINEBREAKER = "~~~~";
 
+	private static final int TOPK = 5;
+
 	/**
 	 * @param args
 	 * @throws IOException
@@ -74,6 +84,23 @@ public class ContextSimCompute {
 		System.out.println("Creating Feature Matrix from "
 				+ NORMALISED_OUTPUT.toString());
 		loadContexts(NORMALISED_OUTPUT);
+
+		// once loaded, find pairwise entity similarity
+		// findContextSimilarityScore();
+
+		System.out.println("Enter your query term. Press 'q' to quit entering");
+
+		// query now
+		BufferedReader console = new BufferedReader(new InputStreamReader(
+				System.in));
+		while (true) {
+			String scan = console.readLine().trim().toUpperCase();
+			if (!scan.equals("Q")) {
+				findTopKSimilarEntities(scan);
+			} else {
+				System.exit(1);
+			}
+		}
 
 	}
 
@@ -233,15 +260,56 @@ public class ContextSimCompute {
 
 			}
 
-			// once loaded, find pairwise entity similarity
-			findContextSimilarityScore();
-
 		} catch (FileNotFoundException e) {
 
 			e.printStackTrace();
 
 		} catch (IOException e) {
 			e.printStackTrace();
+		}
+
+	}
+
+	/**
+	 * takes two contexts and compares them
+	 * 
+	 * @param queryEntity
+	 * 
+	 * @throws IOException
+	 */
+	private static void findTopKSimilarEntities(String queryEntity)
+			throws IOException {
+
+		SparseVector entVector1 = null;
+		SparseVector entVector2 = null;
+		double score = 0;
+
+		Map<String, Double> resultTopK = new HashMap<String, Double>();
+
+		CosineVectorSimilarity cosineSim = new CosineVectorSimilarity();
+
+		System.out.println("**** Top-5 similar items for " + queryEntity
+				+ "*******\n");
+
+		entVector1 = ENTITY_FEATURE_GLOBAL_MATRIX
+				.get(queryEntity.toUpperCase());
+
+		for (Entry<String, MutableSparseVector> entry2 : ENTITY_FEATURE_GLOBAL_MATRIX
+				.entrySet()) {
+
+			entVector2 = entry2.getValue();
+
+			score = cosineSim.similarity(entVector1, entVector2);
+
+			if (score > 0) {
+				resultTopK.put(entry2.getKey(), score);
+			}
+		}
+
+		resultTopK = sortByValue(resultTopK);
+
+		for (Entry<String, Double> e : resultTopK.entrySet()) {
+			System.out.println(e.getKey() + "\t" + e.getValue());
 		}
 
 	}
@@ -289,6 +357,7 @@ public class ContextSimCompute {
 					entVector2 = entry2.getValue();
 
 					score = cosineSim.similarity(entVector1, entVector2);
+
 					if (score > 0)
 						outputFile.write(entry1.getKey() + "\t"
 								+ entry2.getKey() + "\t" + score + "\n");
@@ -306,71 +375,29 @@ public class ContextSimCompute {
 		outputFile.close();
 
 		// 2071017
-		// ENTITY_FEATURE_GLOBAL_MATRIX2 = new ConcurrentHashMap<String,
-		// MutableSparseVector>();
-		//
-		// for (Entry<String, MutableSparseVector> ent :
-		// ENTITY_FEATURE_GLOBAL_MATRIX
-		// .entrySet()) {
-		// ENTITY_FEATURE_GLOBAL_MATRIX2.put(ent.getKey(), ent.getValue());
-		// }
-		// Iterator<Entry<String, MutableSparseVector>> it1 =
-		// ENTITY_FEATURE_GLOBAL_MATRIX
-		// .entrySet().iterator();
-		// Iterator<Entry<String, MutableSparseVector>> it2;
-		//
-		// Entry<String, MutableSparseVector> entry1;
-		// Entry<String, MutableSparseVector> entry2;
-		//
-		// while (it1.hasNext()) {
-		// entry1 = it1.next();
-		// entVector1 = entry1.getValue();
-		// hash1 = System.identityHashCode(entry1.getKey());
-		//
-		// it2 = ENTITY_FEATURE_GLOBAL_MATRIX2.entrySet().iterator();
-		// isAlone = true;
-		// System.out.println("MAP1 = " + ENTITY_FEATURE_GLOBAL_MATRIX.size());
-		// System.out
-		// .println("MAP2 = " + ENTITY_FEATURE_GLOBAL_MATRIX2.size());
-		//
-		// while (it2.hasNext()) {
-		// entry2 = it2.next();
-		// hash2 = System.identityHashCode(entry2.getKey());
-		// if (hash1 > hash2) {
-		//
-		// entVector2 = entry2.getValue();
-		//
-		// score = cosineSim.similarity(entVector1, entVector2);
-		// productCntr++;
-		// if (productCntr % 10000000 == 0 && productCntr > 10000000)
-		// System.out.println(productCntr + "\t"
-		// + (System.nanoTime() - start) / FACTOR);
-		//
-		// if (score > 0)
-		// isAlone = false;
-		//
-		// // if (score > 0.0) {
-		// // outputFile.write(entry1.getKey() + "\t"
-		// // + entry2.getKey() + "\t" + score + "\n");
-		//
-		// // }else{
-		// //
-		// // }
-		//
-		// // it2.remove();
-		// // ENTITY_FEATURE_GLOBAL_MATRIX.remove(entry2.getKey());
-		//
-		// }
-		// }
-		//
-		// if (isAlone) {
-		// it1.remove();
-		// ENTITY_FEATURE_GLOBAL_MATRIX2.remove(entry1.getKey());
-		// }
-		//
-		// }
 
 		System.out.println("Processing Completed");
 
 	}
+
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	static Map<String, Double> sortByValue(Map map) {
+		List list = new LinkedList(map.entrySet());
+		Collections.sort(list, new Comparator() {
+			public int compare(Object o2, Object o1) {
+				return ((Comparable) ((Map.Entry) (o1)).getValue())
+						.compareTo(((Map.Entry) (o2)).getValue());
+			}
+		});
+
+		Map result = new LinkedHashMap();
+		for (Iterator it = list.iterator(); it.hasNext();) {
+			Map.Entry entry = (Map.Entry) it.next();
+			result.put(entry.getKey(), entry.getValue());
+			if (result.size() == TOPK)
+				return result;
+		}
+		return result;
+	}
+
 }
