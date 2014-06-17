@@ -27,6 +27,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.grouplens.lenskit.vectors.MutableSparseVector;
 import org.grouplens.lenskit.vectors.SparseVector;
 import org.grouplens.lenskit.vectors.similarity.CosineVectorSimilarity;
+import org.grouplens.lenskit.vectors.similarity.PearsonCorrelation;
+import org.grouplens.lenskit.vectors.similarity.SpearmanRankCorrelation;
 
 /**
  * @author adutta
@@ -36,6 +38,10 @@ import org.grouplens.lenskit.vectors.similarity.CosineVectorSimilarity;
  * 
  */
 public class ContextSimCompute {
+
+	public enum SIM_FUNC {
+		COSINE, PEARSONS, SPEARMAN
+	};
 
 	/**
 	 * path where the context scores for each entity are scored
@@ -104,26 +110,36 @@ public class ContextSimCompute {
 			// query now
 			BufferedReader console = new BufferedReader(new InputStreamReader(
 					System.in));
-			Map<String, Double> resultTopK = null;
 			while (true) {
 				String scan = console.readLine().trim().toUpperCase();
 				if (!scan.equals("Q")) {
-					resultTopK = findTopKSimilarEntities(scan);
-					if (resultTopK != null) {
-						for (Entry<String, Double> e : resultTopK.entrySet()) {
-							System.out
-									.println(e.getKey() + "\t" + e.getValue());
-						}
-						System.out.println();
-					}
-				} else {
+					printResult(scan, SIM_FUNC.COSINE);
+					printResult(scan, SIM_FUNC.PEARSONS);
+					printResult(scan, SIM_FUNC.SPEARMAN);
+				} else
 					System.exit(1);
-				}
 			}
 		} else {
 			System.err.println("add input file path...");
 			System.err
 					.println("Usage: java -Xmx20G -jar entitySimInteractive.jar  <path>");
+		}
+	}
+
+	private static void printResult(String scan, SIM_FUNC type) {
+		Map<String, Double> resultTopK = null;
+
+		try {
+			resultTopK = findTopKSimilarEntities(scan, type);
+
+			if (resultTopK != null) {
+				for (Entry<String, Double> e : resultTopK.entrySet()) {
+					System.out.println(e.getKey() + "\t" + e.getValue());
+				}
+				System.out.println();
+			}
+		} catch (IOException e1) {
+			e1.printStackTrace();
 		}
 	}
 
@@ -323,7 +339,7 @@ public class ContextSimCompute {
 	 * @throws IOException
 	 */
 	private static Map<String, Double> findTopKSimilarEntities(
-			String queryEntity) throws IOException {
+			String queryEntity, SIM_FUNC s) throws IOException {
 
 		SparseVector entVector1 = null;
 		SparseVector entVector2 = null;
@@ -332,9 +348,11 @@ public class ContextSimCompute {
 		Map<String, Double> resultTopK = new TreeMap<String, Double>();
 
 		CosineVectorSimilarity cosineSim = new CosineVectorSimilarity();
+		SpearmanRankCorrelation spRCorr = new SpearmanRankCorrelation();
+		PearsonCorrelation pearson = new PearsonCorrelation();
 
 		System.out.println("**** Top-10 similar items for " + queryEntity
-				+ "*******\n");
+				+ "******* (" + s + ") + \n");
 
 		queryEntity = queryEntity.replaceAll(" ", "_").toUpperCase();
 
@@ -348,8 +366,16 @@ public class ContextSimCompute {
 
 			entVector2 = entry2.getValue();
 
-			score = cosineSim.similarity(entVector1, entVector2);
+			if (s.equals(SIM_FUNC.COSINE))
+				score = cosineSim.similarity(entVector1, entVector2);
 
+			if (s.equals(SIM_FUNC.SPEARMAN))
+				score = spRCorr.similarity(entVector1, entVector2);
+
+			if (s.equals(SIM_FUNC.PEARSONS))
+				score = pearson.similarity(entVector1, entVector2);
+
+			
 			if (score > 0) {
 				resultTopK.put(entry2.getKey(), score);
 			}
