@@ -58,7 +58,7 @@ public class ContextSimCompute {
 	 */
 	private static final String ENTITY_SIM_SCORES = "/var/work/wiki/simScores";
 
-	private static Map<String, Long> FEATURE_KEYS = new HashMap<String, Long>();
+	private static Map<String, Long> GLOBAL_FEATURE_KEYS = new HashMap<String, Long>();
 
 	static boolean alreadyNormalised = false;
 
@@ -95,6 +95,8 @@ public class ContextSimCompute {
 				normalise(dir);
 			}
 
+			// generate an unique feature id for every feature
+			System.out.println("Creating Feature Keys...");
 			generateFeatureKeys(filePath);
 
 			System.out.println("Creating Feature Matrix from "
@@ -113,9 +115,8 @@ public class ContextSimCompute {
 			while (true) {
 				String scan = console.readLine().trim().toUpperCase();
 				if (!scan.equals("Q")) {
-					printResult(scan, SIM_FUNC.COSINE);
-					printResult(scan, SIM_FUNC.PEARSONS);
-					printResult(scan, SIM_FUNC.SPEARMAN);
+					queryInterface(scan);
+					// printResult(scan, SIM_FUNC.SPEARMAN);
 				} else
 					System.exit(1);
 			}
@@ -126,11 +127,11 @@ public class ContextSimCompute {
 		}
 	}
 
-	private static void printResult(String scan, SIM_FUNC type) {
+	private static void queryInterface(String scan) {
 		Map<String, Double> resultTopK = null;
 
 		try {
-			resultTopK = findTopKSimilarEntities(scan, type);
+			resultTopK = findTopKSimilarEntities(scan);
 
 			if (resultTopK != null) {
 				for (Entry<String, Double> e : resultTopK.entrySet()) {
@@ -164,31 +165,35 @@ public class ContextSimCompute {
 
 	}
 
+	/**
+	 * generate an unique feature id for every feature.
+	 * 
+	 * @param contextScoreFile
+	 */
 	private static void generateFeatureKeys(String contextScoreFile) {
 
 		BufferedReader br = null;
 		String sCurrentLine;
-		String context = null;
+		String feature = null;
 		String[] line = null;
 
-		System.out.println("Creating Feature Keys...");
 		try {
 			br = new BufferedReader(new FileReader(contextScoreFile));
 			long pos = 0;
 
 			while ((sCurrentLine = br.readLine()) != null) {
 				line = sCurrentLine.split("\t");
-				context = line[1];
+				feature = line[1];
 
 				// create the feature key map, since this is way faster than
 				// checking and inserting in a list
-				if (!FEATURE_KEYS.containsKey(context)) {
-					FEATURE_KEYS.put(context, pos);
+				if (!GLOBAL_FEATURE_KEYS.containsKey(feature)) {
+					GLOBAL_FEATURE_KEYS.put(feature, pos);
 					pos++;
 				}
 			}
 
-			System.out.println("FEATURE SPACE = " + FEATURE_KEYS.size());
+			System.out.println("FEATURE SPACE = " + GLOBAL_FEATURE_KEYS.size());
 			System.out.println("Done with creating Feature Keys...");
 
 		} catch (FileNotFoundException e) {
@@ -279,7 +284,7 @@ public class ContextSimCompute {
 		String[] line = null;
 		long lineCntr = 0;
 
-		HashMap<Long, Double> vector = null;
+		HashMap<Long, Double> featureIdVsScore = null;
 
 		try {
 			br = new BufferedReader(new FileReader(contextScoreFile));
@@ -296,7 +301,8 @@ public class ContextSimCompute {
 					normScore = Double.parseDouble(line[2]);
 
 					// put the feature id and feature score
-					vector.put((long) FEATURE_KEYS.get(contextFeature),
+					featureIdVsScore.put(
+							(long) GLOBAL_FEATURE_KEYS.get(contextFeature),
 							normScore);
 
 					if (lineCntr % BATCH == 0 && lineCntr > BATCH) {
@@ -308,15 +314,16 @@ public class ContextSimCompute {
 
 				} else {
 
-					if (vector != null
+					if (featureIdVsScore != null
 							&& !ENTITY_FEATURE_GLOBAL_MATRIX
 									.containsKey(entity)) {
 						// put in the global matrix
 						ENTITY_FEATURE_GLOBAL_MATRIX.put(entity,
-								MutableSparseVector.create(vector));
+								MutableSparseVector.create(featureIdVsScore));
 					}
 
-					vector = new HashMap<Long, Double>();
+					// clear up the feature vector for this entity
+					featureIdVsScore = new HashMap<Long, Double>();
 				}
 
 			}
@@ -339,7 +346,7 @@ public class ContextSimCompute {
 	 * @throws IOException
 	 */
 	private static Map<String, Double> findTopKSimilarEntities(
-			String queryEntity, SIM_FUNC s) throws IOException {
+			String queryEntity) throws IOException {
 
 		SparseVector entVector1 = null;
 		SparseVector entVector2 = null;
@@ -352,7 +359,7 @@ public class ContextSimCompute {
 		PearsonCorrelation pearson = new PearsonCorrelation();
 
 		System.out.println("**** Top-10 similar items for " + queryEntity
-				+ "******* (" + s + ") + \n");
+				+ "*******\n");
 
 		queryEntity = queryEntity.replaceAll(" ", "_").toUpperCase();
 
@@ -366,16 +373,9 @@ public class ContextSimCompute {
 
 			entVector2 = entry2.getValue();
 
-			if (s.equals(SIM_FUNC.COSINE))
-				score = cosineSim.similarity(entVector1, entVector2);
+			score = (cosineSim.similarity(entVector1, entVector2) + pearson
+					.similarity(entVector1, entVector2)) / 2;
 
-			if (s.equals(SIM_FUNC.SPEARMAN))
-				score = spRCorr.similarity(entVector1, entVector2);
-
-			if (s.equals(SIM_FUNC.PEARSONS))
-				score = pearson.similarity(entVector1, entVector2);
-
-			
 			if (score > 0) {
 				resultTopK.put(entry2.getKey(), score);
 			}
