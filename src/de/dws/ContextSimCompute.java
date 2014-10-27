@@ -3,6 +3,8 @@
  */
 package de.dws;
 
+import gnu.trove.map.hash.THashMap;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -16,16 +18,14 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.TreeMap;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.grouplens.lenskit.vectors.MutableSparseVector;
 import org.grouplens.lenskit.vectors.SparseVector;
+import org.grouplens.lenskit.vectors.VectorEntry;
 import org.grouplens.lenskit.vectors.similarity.CosineVectorSimilarity;
 import org.grouplens.lenskit.vectors.similarity.PearsonCorrelation;
 import org.grouplens.lenskit.vectors.similarity.SpearmanRankCorrelation;
@@ -58,11 +58,13 @@ public class ContextSimCompute {
 	 */
 	private static final String ENTITY_SIM_SCORES = "/var/work/wiki/simScores";
 
-	private static Map<String, Long> GLOBAL_FEATURE_KEYS = new HashMap<String, Long>();
+	private static THashMap<String, Long> GLOBAL_FEATURE_KEYS = new THashMap<String, Long>();
+
+	private static THashMap<Long, String> GLOBAL_FEATURE_KEYS_INV = new THashMap<Long, String>();
 
 	static boolean alreadyNormalised = false;
 
-	private static Map<String, MutableSparseVector> ENTITY_FEATURE_GLOBAL_MATRIX = null;
+	private static THashMap<String, MutableSparseVector> ENTITY_FEATURE_GLOBAL_MATRIX = null;
 
 	/**
 	 * for nano secds of time
@@ -79,14 +81,19 @@ public class ContextSimCompute {
 	 * @param args
 	 * @throws IOException
 	 */
+	@SuppressWarnings("resource")
 	public static void main(String[] args) throws IOException {
 		String filePath = null;
+		BufferedWriter logger = null;
 
 		if (args.length == 1) {
 			filePath = args[0];
 
 			File file = new File(filePath);
 			String dir = file.getParent();
+
+			logger = new BufferedWriter(new FileWriter(new File(dir
+					+ "/overlap.log")));
 
 			// runCommands(filePath, dir);
 
@@ -115,10 +122,17 @@ public class ContextSimCompute {
 			while (true) {
 				String scan = console.readLine().trim().toUpperCase();
 				if (!scan.equals("Q")) {
-					queryInterface(scan);
-					// printResult(scan, SIM_FUNC.SPEARMAN);
-				} else
+					queryInterface(scan, logger);
+				} else {
+					if (logger != null)
+						try {
+							logger.close();
+						} catch (IOException e) {
+							e.printStackTrace();
+						}
+
 					System.exit(1);
+				}
 			}
 		} else {
 			System.err.println("add input file path...");
@@ -127,21 +141,57 @@ public class ContextSimCompute {
 		}
 	}
 
-	private static void queryInterface(String scan) {
-		Map<String, Double> resultTopK = null;
+	/**
+	 * QUERY FOR ASKING TOP-K SIMILAR ENTITITES
+	 * 
+	 * @param queryTerm
+	 * @param logger
+	 * @param dirPath
+	 */
+	private static void queryInterface(String queryTerm, BufferedWriter logger) {
+		THashMap<String, Double> resultTopK = null;
 
 		try {
-			resultTopK = findTopKSimilarEntities(scan);
+
+			resultTopK = findTopKSimilarEntities(queryTerm);
 
 			if (resultTopK != null) {
 				for (Entry<String, Double> e : resultTopK.entrySet()) {
 					System.out.println(e.getKey() + "\t" + e.getValue());
+
+					logger.write("\n\n\n" + queryTerm + " ==> ");
+
+					for (VectorEntry vect : ENTITY_FEATURE_GLOBAL_MATRIX
+							.get(queryTerm)) {
+						logger.write(getContext(vect.getKey()) + "\t");
+					}
+					logger.write("\n\n\n" + e.getKey() + " ==> ");
+					for (VectorEntry vect : ENTITY_FEATURE_GLOBAL_MATRIX.get(e
+							.getKey())) {
+						logger.write(getContext(vect.getKey()) + "\t");
+					}
+					logger.write("\n ============================================= \n");
+
 				}
-				System.out.println();
+				logger.flush();
+			} else {
+				System.out.println("No Results found...");
+
 			}
 		} catch (IOException e1) {
 			e1.printStackTrace();
 		}
+	}
+
+	private static String getContext(long key) {
+		// for (Map.Entry<String, Long> feature :
+		// GLOBAL_FEATURE_KEYS.entrySet()) {
+		// if (feature.getValue().longValue() == key) {
+		// return feature.getKey();
+		// }
+		// }
+		return GLOBAL_FEATURE_KEYS_INV.get(key);
+		// return null;
 	}
 
 	private static void runCommands(String file, String dir) {
@@ -183,7 +233,7 @@ public class ContextSimCompute {
 
 			while ((sCurrentLine = br.readLine()) != null) {
 				line = sCurrentLine.split("\t");
-				feature = line[1];
+				feature = line[1].toUpperCase();
 
 				// create the feature key map, since this is way faster than
 				// checking and inserting in a list
@@ -193,9 +243,13 @@ public class ContextSimCompute {
 				}
 			}
 
+			for (Map.Entry<String, Long> entry : GLOBAL_FEATURE_KEYS.entrySet()) {
+				GLOBAL_FEATURE_KEYS_INV.put(entry.getValue(), entry.getKey()
+						.toLowerCase());
+			}
+
 			System.out.println("FEATURE SPACE = " + GLOBAL_FEATURE_KEYS.size());
 			System.out.println("Done with creating Feature Keys...");
-
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
@@ -284,26 +338,25 @@ public class ContextSimCompute {
 		String[] line = null;
 		long lineCntr = 0;
 
-		HashMap<Long, Double> featureIdVsScore = null;
+		THashMap<Long, Double> featureIdVsScore = null;
 
 		try {
 			br = new BufferedReader(new FileReader(contextScoreFile));
 			long start = System.nanoTime();
 
-			ENTITY_FEATURE_GLOBAL_MATRIX = new ConcurrentHashMap<String, MutableSparseVector>();
+			ENTITY_FEATURE_GLOBAL_MATRIX = new THashMap<String, MutableSparseVector>();
 
 			while ((sCurrentLine = br.readLine()) != null) {
 				if (!sCurrentLine.equals(LINEBREAKER)) {
 					lineCntr++;
 					line = sCurrentLine.split("\t");
 					entity = line[0].toUpperCase();
-					contextFeature = line[1];
+					contextFeature = line[1].toUpperCase();
 					normScore = Double.parseDouble(line[2]);
 
 					// put the feature id and feature score
 					featureIdVsScore.put(
-							(long) GLOBAL_FEATURE_KEYS.get(contextFeature),
-							normScore);
+							GLOBAL_FEATURE_KEYS.get(contextFeature), normScore);
 
 					if (lineCntr % BATCH == 0 && lineCntr > BATCH) {
 						System.out.println("Time to create matrix = "
@@ -323,9 +376,8 @@ public class ContextSimCompute {
 					}
 
 					// clear up the feature vector for this entity
-					featureIdVsScore = new HashMap<Long, Double>();
+					featureIdVsScore = new THashMap<Long, Double>();
 				}
-
 			}
 
 		} catch (FileNotFoundException e) {
@@ -345,14 +397,14 @@ public class ContextSimCompute {
 	 * 
 	 * @throws IOException
 	 */
-	private static Map<String, Double> findTopKSimilarEntities(
+	private static THashMap<String, Double> findTopKSimilarEntities(
 			String queryEntity) throws IOException {
 
 		SparseVector entVector1 = null;
 		SparseVector entVector2 = null;
 		double score = 0;
 
-		Map<String, Double> resultTopK = new TreeMap<String, Double>();
+		THashMap<String, Double> resultTopK = new THashMap<String, Double>();
 
 		CosineVectorSimilarity cosineSim = new CosineVectorSimilarity();
 		SpearmanRankCorrelation spRCorr = new SpearmanRankCorrelation();
@@ -373,8 +425,7 @@ public class ContextSimCompute {
 
 			entVector2 = entry2.getValue();
 
-			score = (cosineSim.similarity(entVector1, entVector2) + pearson
-					.similarity(entVector1, entVector2)) / 2;
+			score = (cosineSim.similarity(entVector1, entVector2));
 
 			if (score > 0) {
 				resultTopK.put(entry2.getKey(), score);
@@ -452,7 +503,7 @@ public class ContextSimCompute {
 	}
 
 	@SuppressWarnings({ "rawtypes", "unchecked" })
-	static Map<String, Double> sortByValue(Map map) {
+	static THashMap<String, Double> sortByValue(Map map) {
 		List list = new LinkedList(map.entrySet());
 		Collections.sort(list, new Comparator() {
 			public int compare(Object o2, Object o1) {
@@ -461,7 +512,7 @@ public class ContextSimCompute {
 			}
 		});
 
-		Map result = new LinkedHashMap();
+		THashMap result = new THashMap();
 		for (Iterator it = list.iterator(); it.hasNext();) {
 			Map.Entry entry = (Map.Entry) it.next();
 			result.put(entry.getKey(), entry.getValue());
