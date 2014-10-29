@@ -36,6 +36,7 @@ import org.grouplens.lenskit.vectors.similarity.SpearmanRankCorrelation;
  *         class used to analyze the contexts of entities, compute similarities
  *         between entities based on contexts
  * 
+ * W1 W2/ LMI-COSINE/ WORD-FEATURE COUNT/ INV RANKING/ #FEATURES SHARED  
  */
 public class ContextSimCompute {
 
