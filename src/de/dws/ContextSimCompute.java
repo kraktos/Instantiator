@@ -15,7 +15,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -36,12 +35,12 @@ import org.grouplens.lenskit.vectors.similarity.SpearmanRankCorrelation;
  *         class used to analyze the contexts of entities, compute similarities
  *         between entities based on contexts
  * 
- * W1 W2/ LMI-COSINE/ WORD-FEATURE COUNT/ INV RANKING/ #FEATURES SHARED  
+ *         W1 W2/ LMI-COSINE/ WORD-FEATURE COUNT/ INV RANKING/ #FEATURES SHARED
  */
 public class ContextSimCompute {
 
-	public enum SIM_FUNC {
-		COSINE, PEARSONS, SPEARMAN
+	public enum SIM_TYPE {
+		LMI, FEATURE, RANKING, INTERSECT
 	};
 
 	/**
@@ -78,6 +77,8 @@ public class ContextSimCompute {
 
 	private static final int TOPK = 10;
 
+	private static String runType = null;
+
 	/**
 	 * @param args
 	 * @throws IOException
@@ -87,8 +88,9 @@ public class ContextSimCompute {
 		String filePath = null;
 		BufferedWriter logger = null;
 
-		if (args.length == 1) {
+		if (args.length == 2) {
 			filePath = args[0];
+			runType = args[1];
 
 			File file = new File(filePath);
 			String dir = file.getParent();
@@ -131,14 +133,15 @@ public class ContextSimCompute {
 						} catch (IOException e) {
 							e.printStackTrace();
 						}
-
 					System.exit(1);
 				}
 			}
 		} else {
 			System.err.println("add input file path...");
 			System.err
-					.println("Usage: java -Xmx20G -jar entitySimInteractive.jar  <path>");
+					.println("Usage: java -Xmx20G -jar entitySimInteractive.jar  <path> <type>");
+			System.err
+					.println("ex: java -Xmx20G -jar entitySimInteractive.jar  /data/sorted LMI");
 		}
 	}
 
@@ -269,11 +272,14 @@ public class ContextSimCompute {
 		String sCurrentLine;
 		String entity = null;
 		String context = null;
-		double score = 0;
+		double lmiScore = 0;
+		double wordFeatureScore = 0;
 		String[] line = null;
 		long lineCntr = 0;
 		HashSet<String> set = null;
 		double maxValue = 0;
+		double oldValue = 0;
+		int rank = 0;
 
 		try {
 
@@ -290,15 +296,44 @@ public class ContextSimCompute {
 				line = sCurrentLine.split("\t");
 				entity = line[0];
 				context = line[1];
-				score = Double.parseDouble(line[2]);
+				lmiScore = Double.parseDouble(line[2]);
+				wordFeatureScore = Double.parseDouble(line[3]);
 
 				if (!set.contains(entity.toUpperCase())) {
 					outputFile.write(LINEBREAKER + "\n");
 					set.add(entity.toUpperCase());
-					maxValue = score;
+					// since its sorted, first elem is max
+					maxValue = lmiScore;
+					// reset rank
+					rank = 0;
 				}
-				outputFile.write(entity + "\t" + context + "\t"
-						+ (double) score / maxValue + "\n");
+
+				// case based normalization
+				if (runType.equals(SIM_TYPE.RANKING.toString())) {
+					if (lmiScore != oldValue)
+						rank++;
+
+					outputFile.write(entity + "\t" + context + "\t"
+							+ (double) 1 / rank + "\n");
+					oldValue = lmiScore;
+				}
+
+				else if (runType.equals(SIM_TYPE.LMI.toString())) {
+					outputFile.write(entity + "\t" + context + "\t"
+							+ (double) lmiScore / maxValue + "\n");
+				}
+
+				else if (runType.equals(SIM_TYPE.FEATURE.toString())) {
+					outputFile.write(entity + "\t" + context + "\t"
+							+ (double) wordFeatureScore + "\n");
+				}
+
+				else if (runType.equals(SIM_TYPE.INTERSECT.toString())) {
+					// just set it 1, meaning this feature exists for this
+					// entity
+					outputFile.write(entity + "\t" + context + "\t"
+							+ (double) 1 + "\n");
+				}
 
 				if (lineCntr % BATCH == 0 && lineCntr > BATCH) {
 					System.out.println("Time to normalize = " + lineCntr
