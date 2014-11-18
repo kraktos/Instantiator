@@ -46,10 +46,10 @@ public class ContextSimCompute {
 	/**
 	 * path where the context scores for each entity are scored
 	 */
-	private static final String CONTEXT_SCORE_FILE = "sorted"; // wiki_1000_ContextScores";
+	private static final String CONTEXT_SCORE_FILE = "sorted_wiki_ner_NER_WIKI__FreqSigLMI"; // wiki_1000_ContextScores";
 
 	/**
-	 * path of the normalised input file
+	 * path of the normalized input file
 	 */
 	private static final String NORMALISED_OUTPUT = "normalised";
 
@@ -98,8 +98,6 @@ public class ContextSimCompute {
 			logger = new BufferedWriter(new FileWriter(new File(dir
 					+ "/overlap.log")));
 
-			// runCommands(filePath, dir);
-
 			if (!alreadyNormalised) {
 				System.out.println("Normalising" + filePath.toString());
 				normalise(dir);
@@ -123,8 +121,8 @@ public class ContextSimCompute {
 			BufferedReader console = new BufferedReader(new InputStreamReader(
 					System.in));
 			while (true) {
-				String scan = console.readLine().trim().toUpperCase();
-				if (!scan.equals("Q")) {
+				String scan = console.readLine().trim();
+				if (!scan.equalsIgnoreCase("q")) {
 					queryInterface(scan, logger);
 				} else {
 					if (logger != null)
@@ -167,12 +165,14 @@ public class ContextSimCompute {
 
 					for (VectorEntry vect : ENTITY_FEATURE_GLOBAL_MATRIX
 							.get(queryTerm)) {
-						logger.write(getContext(vect.getKey()) + "\t");
+						logger.write(GLOBAL_FEATURE_KEYS_INV.get(vect.getKey())
+								+ "\t");
 					}
 					logger.write("\n\n\n" + e.getKey() + " ==> ");
 					for (VectorEntry vect : ENTITY_FEATURE_GLOBAL_MATRIX.get(e
 							.getKey())) {
-						logger.write(getContext(vect.getKey()) + "\t");
+						logger.write(GLOBAL_FEATURE_KEYS_INV.get(vect.getKey())
+								+ "\t");
 					}
 					logger.write("\n ============================================= \n");
 
@@ -185,38 +185,6 @@ public class ContextSimCompute {
 		} catch (IOException e1) {
 			e1.printStackTrace();
 		}
-	}
-
-	private static String getContext(long key) {
-		// for (Map.Entry<String, Long> feature :
-		// GLOBAL_FEATURE_KEYS.entrySet()) {
-		// if (feature.getValue().longValue() == key) {
-		// return feature.getKey();
-		// }
-		// }
-		return GLOBAL_FEATURE_KEYS_INV.get(key);
-		// return null;
-	}
-
-	private static void runCommands(String file, String dir) {
-
-		try {
-			System.out.println("Running soring and preprocessing of " + file);
-			Runtime runTime = Runtime.getRuntime();
-			Process process = runTime.exec("sed \'s/ /_/g\' " + file + " > "
-					+ dir + "/temp");
-			process.waitFor();
-
-			process = runTime.exec("sort -k1,1 -k3,3rn temp > " + dir + "/"
-					+ CONTEXT_SCORE_FILE);
-			process.waitFor();
-
-		} catch (IOException e) {
-			e.printStackTrace();
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
-
 	}
 
 	/**
@@ -237,7 +205,7 @@ public class ContextSimCompute {
 
 			while ((sCurrentLine = br.readLine()) != null) {
 				line = sCurrentLine.split("\t");
-				feature = line[1].toUpperCase();
+				feature = line[1];
 
 				// create the feature key map, since this is way faster than
 				// checking and inserting in a list
@@ -247,13 +215,9 @@ public class ContextSimCompute {
 				}
 			}
 
-			for (Map.Entry<String, Long> entry : GLOBAL_FEATURE_KEYS.entrySet()) {
-				GLOBAL_FEATURE_KEYS_INV.put(entry.getValue(), entry.getKey()
-						.toLowerCase());
-			}
-
 			System.out.println("FEATURE SPACE = " + GLOBAL_FEATURE_KEYS.size());
 			System.out.println("Done with creating Feature Keys...");
+
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
@@ -299,9 +263,9 @@ public class ContextSimCompute {
 				lmiScore = Double.parseDouble(line[2]);
 				wordFeatureScore = Double.parseDouble(line[3]);
 
-				if (!set.contains(entity.toUpperCase())) {
+				if (!set.contains(entity)) {
 					outputFile.write(LINEBREAKER + "\n");
-					set.add(entity.toUpperCase());
+					set.add(entity);
 					// since its sorted, first elem is max
 					maxValue = lmiScore;
 					// reset rank
@@ -386,8 +350,8 @@ public class ContextSimCompute {
 				if (!sCurrentLine.equals(LINEBREAKER)) {
 					lineCntr++;
 					line = sCurrentLine.split("\t");
-					entity = line[0].toUpperCase();
-					contextFeature = line[1].toUpperCase();
+					entity = line[0];
+					contextFeature = line[1];
 					normScore = Double.parseDouble(line[2]);
 
 					// put the feature id and feature score
@@ -443,13 +407,11 @@ public class ContextSimCompute {
 		THashMap<String, Double> resultTopK = new THashMap<String, Double>();
 
 		CosineVectorSimilarity cosineSim = new CosineVectorSimilarity();
-		SpearmanRankCorrelation spRCorr = new SpearmanRankCorrelation();
-		PearsonCorrelation pearson = new PearsonCorrelation();
 
 		System.out.println("**** Top-10 similar items for " + queryEntity
 				+ "*******\n");
 
-		queryEntity = queryEntity.replaceAll(" ", "_").toUpperCase();
+		queryEntity = queryEntity.replaceAll(" ", "_");
 
 		entVector1 = ENTITY_FEATURE_GLOBAL_MATRIX.get(queryEntity);
 
