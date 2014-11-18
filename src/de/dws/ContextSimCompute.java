@@ -411,7 +411,7 @@ public class ContextSimCompute {
 		System.out.println("**** Top-10 similar items for " + queryEntity
 				+ "*******\n");
 
-		queryEntity = queryEntity.replaceAll(" ", "_");
+		// queryEntity = queryEntity.replaceAll(" ", "_");
 
 		entVector1 = ENTITY_FEATURE_GLOBAL_MATRIX.get(queryEntity);
 
