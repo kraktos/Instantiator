@@ -75,16 +75,16 @@ public class ContextSimCompute {
 
 	private static final String LINEBREAKER = "~~~~";
 
-	private static final int TOPK = 10;
+	private static final int TOPK = 15;
 
 	private static String runType = null;
 
 	/**
 	 * @param args
-	 * @throws IOException
+	 * @throws Exception
 	 */
 	@SuppressWarnings("resource")
-	public static void main(String[] args) throws IOException {
+	public static void main(String[] args) throws Exception {
 		String filePath = null;
 		BufferedWriter logger = null;
 
@@ -191,8 +191,10 @@ public class ContextSimCompute {
 	 * generate an unique feature id for every feature.
 	 * 
 	 * @param contextScoreFile
+	 * @throws Exception
 	 */
-	private static void generateFeatureKeys(String contextScoreFile) {
+	private static void generateFeatureKeys(String contextScoreFile)
+			throws Exception {
 
 		BufferedReader br = null;
 		String sCurrentLine;
@@ -209,9 +211,12 @@ public class ContextSimCompute {
 
 				// create the feature key map, since this is way faster than
 				// checking and inserting in a list
-				if (!GLOBAL_FEATURE_KEYS.containsKey(feature)) {
-					GLOBAL_FEATURE_KEYS.put(feature, pos);
-					pos++;
+
+				if (shouldWriteOut(feature)) {
+					if (!GLOBAL_FEATURE_KEYS.containsKey(feature.toLowerCase())) {
+						GLOBAL_FEATURE_KEYS.put(feature.toLowerCase(), pos);
+						pos++;
+					}
 				}
 			}
 
@@ -229,15 +234,18 @@ public class ContextSimCompute {
 	 * a pre processing step to normalize the values
 	 * 
 	 * @param contextScoreFile
+	 * @throws Exception
 	 */
-	private static void normalise(String contextScoreFileDir) {
+	private static void normalise(String contextScoreFileDir) throws Exception {
 
 		BufferedReader br = null;
 		String sCurrentLine;
-		String entity = null;
-		String context = null;
+		String word = null;
+		String feature = null;
 		double lmiScore = 0;
 		double wordFeatureScore = 0;
+		double wordCount = 0;
+		double featureCount = 0;
 		String[] line = null;
 		long lineCntr = 0;
 		HashSet<String> set = null;
@@ -258,47 +266,53 @@ public class ContextSimCompute {
 			while ((sCurrentLine = br.readLine()) != null) {
 				lineCntr++;
 				line = sCurrentLine.split("\t");
-				entity = line[0];
-				context = line[1];
+				word = line[0];
+				feature = line[1];
 				lmiScore = Double.parseDouble(line[2]);
 				wordFeatureScore = Double.parseDouble(line[3]);
+				wordCount = Double.parseDouble(line[4]);
+				featureCount = Double.parseDouble(line[5]);
 
-				if (!set.contains(entity)) {
+				if (!set.contains(word)) {
 					outputFile.write(LINEBREAKER + "\n");
-					set.add(entity);
+					set.add(word);
 					// since its sorted, first elem is max
 					maxValue = lmiScore;
 					// reset rank
 					rank = 0;
 				}
 
-				// case based normalization
-				if (runType.equals(SIM_TYPE.RANKING.toString())) {
-					if (lmiScore != oldValue)
-						rank++;
+				// if (feature.equals("trigram#the#@#Darlington"))
+				// System.out.println();
 
-					outputFile.write(entity + "\t" + context + "\t"
-							+ (double) 1 / rank + "\n");
-					oldValue = lmiScore;
+				if (shouldWriteOut(feature)) {
+					// case based normalization
+					if (runType.equals(SIM_TYPE.RANKING.toString())) {
+						if (lmiScore != oldValue)
+							rank++;
+
+						outputFile.write(word + "\t" + feature + "\t"
+								+ (double) 1 / rank + "\n");
+						oldValue = lmiScore;
+					}
+
+					else if (runType.equals(SIM_TYPE.LMI.toString())) {
+						outputFile.write(word + "\t" + feature + "\t"
+								+ (double) lmiScore / maxValue + "\n");
+					}
+
+					else if (runType.equals(SIM_TYPE.FEATURE.toString())) {
+						outputFile.write(word + "\t" + feature + "\t"
+								+ (double) wordFeatureScore + "\n");
+					}
+
+					else if (runType.equals(SIM_TYPE.INTERSECT.toString())) {
+						// just set it 1, meaning this feature exists for this
+						// entity
+						outputFile.write(word + "\t" + feature + "\t"
+								+ (double) 1 + "\n");
+					}
 				}
-
-				else if (runType.equals(SIM_TYPE.LMI.toString())) {
-					outputFile.write(entity + "\t" + context + "\t"
-							+ (double) lmiScore / maxValue + "\n");
-				}
-
-				else if (runType.equals(SIM_TYPE.FEATURE.toString())) {
-					outputFile.write(entity + "\t" + context + "\t"
-							+ (double) wordFeatureScore + "\n");
-				}
-
-				else if (runType.equals(SIM_TYPE.INTERSECT.toString())) {
-					// just set it 1, meaning this feature exists for this
-					// entity
-					outputFile.write(entity + "\t" + context + "\t"
-							+ (double) 1 + "\n");
-				}
-
 				if (lineCntr % BATCH == 0 && lineCntr > BATCH) {
 					System.out.println("Time to normalize = " + lineCntr
 							+ " lines	 = " + (System.nanoTime() - start)
@@ -322,6 +336,27 @@ public class ContextSimCompute {
 		}
 	}
 
+	private static boolean shouldWriteOut(String context) throws Exception {
+
+		String[] featureElems = context.split("#");
+		String prec = null;
+		String succed = null;
+		boolean flag = false;
+
+		if (context.indexOf("\\#\\#") == -1 && featureElems.length != 4) {
+			flag = false;
+		} else {
+			try {
+				prec = featureElems[1];
+				succed = featureElems[3];
+				flag = prec.matches("[a-zA-Z]+") && succed.matches("[a-zA-Z]+");
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		return flag;
+	}
+
 	/**
 	 * iterate the normalised input file to create a global matrix of entities
 	 * vs features
@@ -335,6 +370,7 @@ public class ContextSimCompute {
 		String entity = null;
 		String contextFeature = null;
 		double normScore = 0;
+		double wordCount = 0;
 		String[] line = null;
 		long lineCntr = 0;
 
@@ -355,8 +391,8 @@ public class ContextSimCompute {
 					normScore = Double.parseDouble(line[2]);
 
 					// put the feature id and feature score
-					featureIdVsScore.put(
-							GLOBAL_FEATURE_KEYS.get(contextFeature), normScore);
+					featureIdVsScore.put(GLOBAL_FEATURE_KEYS.get(contextFeature
+							.toLowerCase()), normScore);
 
 					if (lineCntr % BATCH == 0 && lineCntr > BATCH) {
 						System.out.println("Time to create matrix = "
@@ -367,14 +403,20 @@ public class ContextSimCompute {
 
 				} else {
 
-					if (featureIdVsScore != null
-							&& !ENTITY_FEATURE_GLOBAL_MATRIX
-									.containsKey(entity)) {
-						// put in the global matrix
-						ENTITY_FEATURE_GLOBAL_MATRIX.put(entity,
-								MutableSparseVector.create(featureIdVsScore));
-					}
+					try {
 
+						if (featureIdVsScore != null
+								&& !ENTITY_FEATURE_GLOBAL_MATRIX
+										.containsKey(entity)) {
+							// put in the global matrix
+							ENTITY_FEATURE_GLOBAL_MATRIX.put(entity,
+									MutableSparseVector
+											.create(featureIdVsScore));
+						}
+
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
 					// clear up the feature vector for this entity
 					featureIdVsScore = new THashMap<Long, Double>();
 				}
@@ -408,8 +450,8 @@ public class ContextSimCompute {
 
 		CosineVectorSimilarity cosineSim = new CosineVectorSimilarity();
 
-		System.out.println("**** Top-10 similar items for " + queryEntity
-				+ "*******\n");
+		System.out.println("**** Top-" + TOPK + " similar items for "
+				+ queryEntity + "*******\n");
 
 		// queryEntity = queryEntity.replaceAll(" ", "_");
 

@@ -66,6 +66,7 @@ public class ClientAnnotator {
 		long start = System.nanoTime();
 
 		try {
+			// inititate entitiy tagger
 			init();
 		} catch (IOException e) {
 			System.err.println("Exception while initiating repository");
@@ -123,6 +124,9 @@ public class ClientAnnotator {
 					indexFile.write(sCurrentLine + "\n");
 					annoFile.write(sCurrentLine + "\n");
 				}
+
+				if (sCurrentLine.indexOf("Dolores") != -1)
+					System.out.println();
 
 				// split on one or more tab
 				String[] arr = sCurrentLine.split("\t+");
@@ -285,7 +289,7 @@ public class ClientAnnotator {
 									+ wordsInSentence.get(x++).toString()
 									+ "\tB\n");
 							// lineIndex++;
-							//lineIndex = lineIndex + 1;
+							// lineIndex = lineIndex + 1;
 
 						}
 
@@ -295,7 +299,7 @@ public class ClientAnnotator {
 
 							+ "\t" + wordsInSentence.get(x++).toString()
 									+ "\tI\n");
-//							lineIndex = lineIndex + spotIndxCntr ;
+							// lineIndex = lineIndex + spotIndxCntr ;
 
 							// lineIndex++;
 						}
