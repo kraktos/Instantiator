@@ -22,12 +22,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import org.apache.commons.io.FileUtils;
+import org.grouplens.lenskit.vectors.ImmutableSparseVector;
 import org.grouplens.lenskit.vectors.MutableSparseVector;
 import org.grouplens.lenskit.vectors.SparseVector;
 import org.grouplens.lenskit.vectors.VectorEntry;
 import org.grouplens.lenskit.vectors.similarity.CosineVectorSimilarity;
-import org.grouplens.lenskit.vectors.similarity.PearsonCorrelation;
-import org.grouplens.lenskit.vectors.similarity.SpearmanRankCorrelation;
 
 /**
  * @author adutta
@@ -46,7 +46,9 @@ public class ContextSimCompute {
 	/**
 	 * path where the context scores for each entity are scored
 	 */
-	private static final String CONTEXT_SCORE_FILE = "sorted_wiki_ner_NER_WIKI__FreqSigLMI"; // wiki_1000_ContextScores";
+	private static final String CONTEXT_SCORE_FILE = "sorted_wiki_ner_NER_WIKI_unpruned";// "sorted_wiki_ner_NER_WIKI__FreqSigLMI";
+																							// //
+																							// wiki_1000_ContextScores";
 
 	/**
 	 * path of the normalized input file
@@ -64,7 +66,7 @@ public class ContextSimCompute {
 
 	static boolean alreadyNormalised = false;
 
-	private static THashMap<String, MutableSparseVector> ENTITY_FEATURE_GLOBAL_MATRIX = null;
+	private static THashMap<String, ImmutableSparseVector> ENTITY_FEATURE_GLOBAL_MATRIX = null;
 
 	/**
 	 * for nano secds of time
@@ -78,6 +80,7 @@ public class ContextSimCompute {
 	private static final int TOPK = 15;
 
 	private static String runType = null;
+	private static String mode = null;
 
 	/**
 	 * @param args
@@ -88,9 +91,10 @@ public class ContextSimCompute {
 		String filePath = null;
 		BufferedWriter logger = null;
 
-		if (args.length == 2) {
+		if (args.length == 3) {
 			filePath = args[0];
 			runType = args[1];
+			mode = args[2];
 
 			File file = new File(filePath);
 			String dir = file.getParent();
@@ -114,33 +118,58 @@ public class ContextSimCompute {
 			// once loaded, find pairwise entity similarity
 			// findContextSimilarityScore();
 
-			System.out
-					.println("Enter your query term. Press 'q' to quit entering");
-
-			// query now
-			BufferedReader console = new BufferedReader(new InputStreamReader(
-					System.in));
-			while (true) {
-				String scan = console.readLine().trim();
-				if (!scan.equalsIgnoreCase("q")) {
-					queryInterface(scan, logger);
-				} else {
-					if (logger != null)
-						try {
-							logger.close();
-						} catch (IOException e) {
-							e.printStackTrace();
-						}
-					System.exit(1);
+			if (mode.equals("Q")) {
+				System.out
+						.println("Enter your query term. Press 'q' to quit entering");
+				// query now
+				BufferedReader console = new BufferedReader(
+						new InputStreamReader(System.in));
+				while (true) {
+					String scan = console.readLine().trim();
+					if (!scan.equalsIgnoreCase("q")) {
+						queryInterface(scan, logger);
+					} else {
+						if (logger != null)
+							try {
+								logger.close();
+							} catch (IOException e) {
+								e.printStackTrace();
+							}
+						System.exit(1);
+					}
 				}
+			} else if (mode.equals("C")) {
+				// load the union of features
+				loadFeaturesForClass("Cartoon");
+				// loadFeaturesForClass("Film");
+
 			}
 		} else {
 			System.err.println("add input file path...");
 			System.err
-					.println("Usage: java -Xmx20G -jar entitySimInteractive.jar  <path> <type>");
+					.println("Usage: java -Xmx20G -jar entitySimInteractive.jar  <path> <type> <mode>");
 			System.err
-					.println("ex: java -Xmx20G -jar entitySimInteractive.jar  /data/sorted LMI");
+					.println("ex: java -Xmx20G -jar entitySimInteractive.jar  /data/sorted LMI Q");
+			System.err
+					.println("ex: java -Xmx20G -jar entitySimInteractive.jar  /data/sorted LMI C");
 		}
+	}
+
+	private static void loadFeaturesForClass(String conceptName) {
+		try {
+			List<String> conceptInstances = FileUtils.readLines(new File(
+					"/var/work/wiki/Entities.4." + conceptName), "UTF-8");
+
+			// for each of these instances of type conceptName, form an union of
+			// feature
+			for (String entity : conceptInstances) {
+				System.out.println(entity);
+			}
+		} catch (IOException e) {
+
+			e.printStackTrace();
+		}
+
 	}
 
 	/**
@@ -206,17 +235,21 @@ public class ContextSimCompute {
 			long pos = 0;
 
 			while ((sCurrentLine = br.readLine()) != null) {
-				line = sCurrentLine.split("\t");
-				feature = line[1];
+				try {
+					line = sCurrentLine.split("\t");
+					feature = line[1];
 
-				// create the feature key map, since this is way faster than
-				// checking and inserting in a list
+					// create the feature key map, since this is way faster than
+					// checking and inserting in a list
 
-				if (shouldWriteOut(feature)) {
-					if (!GLOBAL_FEATURE_KEYS.containsKey(feature.toLowerCase())) {
-						GLOBAL_FEATURE_KEYS.put(feature.toLowerCase(), pos);
-						pos++;
+					if (shouldWriteOut(feature)) {
+						if (!GLOBAL_FEATURE_KEYS.containsKey(feature
+								.toLowerCase())) {
+							GLOBAL_FEATURE_KEYS.put(feature.toLowerCase(), pos);
+							pos++;
+						}
 					}
+				} catch (Exception e) {
 				}
 			}
 
@@ -266,58 +299,64 @@ public class ContextSimCompute {
 			while ((sCurrentLine = br.readLine()) != null) {
 				lineCntr++;
 				line = sCurrentLine.split("\t");
-				word = line[0];
-				feature = line[1];
-				lmiScore = Double.parseDouble(line[2]);
-				wordFeatureScore = Double.parseDouble(line[3]);
-				wordCount = Double.parseDouble(line[4]);
-				featureCount = Double.parseDouble(line[5]);
 
-				if (!set.contains(word)) {
-					outputFile.write(LINEBREAKER + "\n");
-					set.add(word);
-					// since its sorted, first elem is max
-					maxValue = lmiScore;
-					// reset rank
-					rank = 0;
-				}
+				try {
+					word = line[0];
+					feature = line[1];
+					lmiScore = Double.parseDouble(line[2]);
+					wordFeatureScore = Double.parseDouble(line[3]);
+					wordCount = Double.parseDouble(line[4]);
+					featureCount = Double.parseDouble(line[5]);
 
-				// if (feature.equals("trigram#the#@#Darlington"))
-				// System.out.println();
-
-				if (shouldWriteOut(feature)) {
-					// case based normalization
-					if (runType.equals(SIM_TYPE.RANKING.toString())) {
-						if (lmiScore != oldValue)
-							rank++;
-
-						outputFile.write(word + "\t" + feature + "\t"
-								+ (double) 1 / rank + "\n");
-						oldValue = lmiScore;
+					if (!set.contains(word)) {
+						outputFile.write(LINEBREAKER + "\n");
+						set.add(word);
+						// since its sorted, first elem is max
+						maxValue = lmiScore;
+						// reset rank
+						rank = 0;
 					}
 
-					else if (runType.equals(SIM_TYPE.LMI.toString())) {
-						outputFile.write(word + "\t" + feature + "\t"
-								+ (double) lmiScore / maxValue + "\n");
-					}
+					// if (feature.equals("trigram#the#@#Darlington"))
+					// System.out.println();
 
-					else if (runType.equals(SIM_TYPE.FEATURE.toString())) {
-						outputFile.write(word + "\t" + feature + "\t"
-								+ (double) wordFeatureScore + "\n");
-					}
+					if (shouldWriteOut(feature)) {
+						// case based normalization
+						if (runType.equals(SIM_TYPE.RANKING.toString())) {
+							if (lmiScore != oldValue)
+								rank++;
 
-					else if (runType.equals(SIM_TYPE.INTERSECT.toString())) {
-						// just set it 1, meaning this feature exists for this
-						// entity
-						outputFile.write(word + "\t" + feature + "\t"
-								+ (double) 1 + "\n");
+							outputFile.write(word + "\t" + feature + "\t"
+									+ (double) 1 / rank + "\n");
+							oldValue = lmiScore;
+						}
+
+						else if (runType.equals(SIM_TYPE.LMI.toString())) {
+							outputFile.write(word + "\t" + feature + "\t"
+									+ (double) lmiScore / maxValue + "\n");
+						}
+
+						else if (runType.equals(SIM_TYPE.FEATURE.toString())) {
+							outputFile.write(word + "\t" + feature + "\t"
+									+ (double) wordFeatureScore + "\n");
+						}
+
+						else if (runType.equals(SIM_TYPE.INTERSECT.toString())) {
+							// just set it 1, meaning this feature exists for
+							// this
+							// entity
+							outputFile.write(word + "\t" + feature + "\t"
+									+ (double) 1 + "\n");
+						}
 					}
-				}
-				if (lineCntr % BATCH == 0 && lineCntr > BATCH) {
-					System.out.println("Time to normalize = " + lineCntr
-							+ " lines	 = " + (System.nanoTime() - start)
-							/ FACTOR + " secds..");
-					outputFile.flush();
+					if (lineCntr % BATCH == 0 && lineCntr > BATCH) {
+						System.out.println("Time to normalize = " + lineCntr
+								+ " lines	 = " + (System.nanoTime() - start)
+								/ FACTOR + " secds..");
+						outputFile.flush();
+					}
+				} catch (Exception e) {
+					System.out.println("Problem with " + sCurrentLine);
 				}
 			}
 
@@ -337,24 +376,25 @@ public class ContextSimCompute {
 	}
 
 	private static boolean shouldWriteOut(String context) throws Exception {
+		return true;
 
-		String[] featureElems = context.split("#");
-		String prec = null;
-		String succed = null;
-		boolean flag = false;
-
-		if (context.indexOf("\\#\\#") == -1 && featureElems.length != 4) {
-			flag = false;
-		} else {
-			try {
-				prec = featureElems[1];
-				succed = featureElems[3];
-				flag = prec.matches("[a-zA-Z]+") && succed.matches("[a-zA-Z]+");
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-		}
-		return flag;
+		// String[] featureElems = context.split("#");
+		// String prec = null;
+		// String succed = null;
+		// boolean flag = false;
+		//
+		// if (context.indexOf("\\#\\#") == -1 && featureElems.length != 4) {
+		// flag = false;
+		// } else {
+		// try {
+		// prec = featureElems[1];
+		// succed = featureElems[3];
+		// flag = prec.matches("[a-zA-Z]+") && succed.matches("[a-zA-Z]+");
+		// } catch (Exception e) {
+		// e.printStackTrace();
+		// }
+		// }
+		// return flag;
 	}
 
 	/**
@@ -380,7 +420,7 @@ public class ContextSimCompute {
 			br = new BufferedReader(new FileReader(contextScoreFile));
 			long start = System.nanoTime();
 
-			ENTITY_FEATURE_GLOBAL_MATRIX = new THashMap<String, MutableSparseVector>();
+			ENTITY_FEATURE_GLOBAL_MATRIX = new THashMap<String, ImmutableSparseVector>();
 
 			while ((sCurrentLine = br.readLine()) != null) {
 				if (!sCurrentLine.equals(LINEBREAKER)) {
@@ -404,13 +444,12 @@ public class ContextSimCompute {
 				} else {
 
 					try {
-
 						if (featureIdVsScore != null
 								&& !ENTITY_FEATURE_GLOBAL_MATRIX
 										.containsKey(entity)) {
 							// put in the global matrix
 							ENTITY_FEATURE_GLOBAL_MATRIX.put(entity,
-									MutableSparseVector
+									ImmutableSparseVector
 											.create(featureIdVsScore));
 						}
 
@@ -442,8 +481,8 @@ public class ContextSimCompute {
 	private static THashMap<String, Double> findTopKSimilarEntities(
 			String queryEntity) throws IOException {
 
-		SparseVector entVector1 = null;
-		SparseVector entVector2 = null;
+		SparseVector entVector1 = SparseVector.empty();
+		SparseVector entVector2 = SparseVector.empty();
 		double score = 0;
 
 		THashMap<String, Double> resultTopK = new THashMap<String, Double>();
@@ -456,11 +495,11 @@ public class ContextSimCompute {
 		// queryEntity = queryEntity.replaceAll(" ", "_");
 
 		entVector1 = ENTITY_FEATURE_GLOBAL_MATRIX.get(queryEntity);
-
+		
 		if (entVector1 == null) {
 			return null;
 		}
-		for (Entry<String, MutableSparseVector> entry2 : ENTITY_FEATURE_GLOBAL_MATRIX
+		for (Entry<String, ImmutableSparseVector> entry2 : ENTITY_FEATURE_GLOBAL_MATRIX
 				.entrySet()) {
 
 			entVector2 = entry2.getValue();
@@ -504,13 +543,13 @@ public class ContextSimCompute {
 
 		long start = System.nanoTime();
 
-		for (Entry<String, MutableSparseVector> entry1 : ENTITY_FEATURE_GLOBAL_MATRIX
+		for (Entry<String, ImmutableSparseVector> entry1 : ENTITY_FEATURE_GLOBAL_MATRIX
 				.entrySet()) {
 
 			hash1 = System.identityHashCode(entry1.getKey());
 			entVector1 = entry1.getValue();
 
-			for (Entry<String, MutableSparseVector> entry2 : ENTITY_FEATURE_GLOBAL_MATRIX
+			for (Entry<String, ImmutableSparseVector> entry2 : ENTITY_FEATURE_GLOBAL_MATRIX
 					.entrySet()) {
 				productCntr++;
 				hash2 = System.identityHashCode(entry2.getKey());

@@ -18,7 +18,9 @@ import java.io.BufferedWriter;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -28,6 +30,7 @@ import java.util.Map.Entry;
 
 import LBJ2.nlp.Sentence;
 import LBJ2.nlp.SentenceSplitter;
+import LBJ2.nlp.Word;
 import LBJ2.parse.LinkedVector;
 import de.dws.SpotLinkDao;
 
@@ -43,8 +46,7 @@ public class ClientAnnotator {
 	// language of choice
 	private static final String LANG = "en";
 
-	private static final String TRAIN_FILE = "/var/work/wiki/sample.train";
-	// "/var/work/wiki/en_AllArticles_plaintext.sentSep.sentenceFiltered.txt.treetagger.train";
+	private static final String TRAIN_FILE = "/var/work/wiki/en_AllArticles_plaintext.sentSep.sentenceFiltered.txt.treetagger.train";
 	// "/var/work/wiki/sample.train";
 
 	private static final String INDEXED_FILE = "/var/work/wiki/INDEXED_TRAIN.log";
@@ -64,6 +66,20 @@ public class ClientAnnotator {
 	 */
 	public static void main(String[] args) throws IOException {
 		long start = System.nanoTime();
+		// LinkedVector wordsInSentence;
+		//
+		// Sentence sentence = new Sentence(
+		// "In need of a model for his statuette Gibbons was "
+		// + "introduced by his then wife Dolores del Río to "
+		// +
+		// "Mexican film director and actor Emilio \" El Indio \" Fernández .");
+		//
+		// wordsInSentence = sentence.wordSplit();
+		// sentence.toString().split(" ");
+
+		// for (int i = 0; i < sentence.toString().split("\\s").length; i++) {
+		// System.out.println(sentence.toString().split("\\s")[i]);
+		// }
 
 		try {
 			// inititate entitiy tagger
@@ -151,8 +167,14 @@ public class ClientAnnotator {
 					// analyse all on every sentence level
 					for (Sentence sentence : sentences) {
 
+						if (sentence.toString().indexOf(
+								"In need of a model for his") != -1)
+							System.out.println();
+
 						// get the words
-						wordsInSentence = sentence.wordSplit();
+						// wordsInSentence = sentence.wordSplit();
+						// alternative
+						wordsInSentence = getWords(sentence);
 
 						// get the annotations
 						annotatedSpots = annotate(sentence.text);
@@ -164,7 +186,8 @@ public class ClientAnnotator {
 						// }
 
 						lineIndex = getIndices2(wordsInSentence,
-								annotatedSpots, annoFile, indexFile, lineIndex);
+								annotatedSpots, annoFile, indexFile, lineIndex,
+								POSTAGGED);
 
 						// go through each word in the sentence, and find its
 						// annotated Wiki Link
@@ -223,6 +246,15 @@ public class ClientAnnotator {
 
 	}
 
+	private static LinkedVector getWords(Sentence sentence) {
+		LinkedVector lVector = new LinkedVector();
+		String[] words = sentence.toString().split("\\s");
+		for (int wrdIdx = 0; wrdIdx < words.length; wrdIdx++) {
+			lVector.add(new Word(words[wrdIdx]));
+		}
+		return lVector;
+	}
+
 	public static int findArray(String[] array, String[] subArray) {
 		return Collections.indexOfSubList(Arrays.asList(array),
 				Arrays.asList(subArray));
@@ -251,7 +283,8 @@ public class ClientAnnotator {
 
 	private static int getIndices2(LinkedVector wordsInSentence,
 			Map<String, SpotLinkDao> annotatedSpots, BufferedWriter annoFile,
-			BufferedWriter indexFile, int lineIndex) throws IOException {
+			BufferedWriter indexFile, int lineIndex,
+			Map<String, String> posTagMap) throws IOException {
 
 		for (int x = 0; x < wordsInSentence.size();) {
 			String spot = null;
@@ -285,9 +318,10 @@ public class ClientAnnotator {
 					if (spotIndxCntr == 0) {
 
 						if (wordsInSentence.get(x) != null) {
+							String word = wordsInSentence.get(x++).toString();
 							indexFile.write((lineIndex + spotIndxCntr) + "\t"
-									+ wordsInSentence.get(x++).toString()
-									+ "\tB\n");
+									+ word + "\tB\t" + posTagMap.get(word)
+									+ "\n");
 							// lineIndex++;
 							// lineIndex = lineIndex + 1;
 
@@ -295,10 +329,10 @@ public class ClientAnnotator {
 
 					} else {
 						if (wordsInSentence.get(x) != null) {
-							indexFile.write((lineIndex + spotIndxCntr)
-
-							+ "\t" + wordsInSentence.get(x++).toString()
-									+ "\tI\n");
+							String word = wordsInSentence.get(x++).toString();
+							indexFile.write((lineIndex + spotIndxCntr) + "\t"
+									+ word + "\tI\t" + posTagMap.get(word)
+									+ "\n");
 							// lineIndex = lineIndex + spotIndxCntr ;
 
 							// lineIndex++;
@@ -318,8 +352,9 @@ public class ClientAnnotator {
 			} else {
 				// write to index file
 				if (wordsInSentence.get(x) != null) {
-					indexFile.write(lineIndex + "\t"
-							+ wordsInSentence.get(x++).toString() + "\tO\n");
+					String word = wordsInSentence.get(x++).toString();
+					indexFile.write(lineIndex + "\t" + word + "\tO\t"
+							+ posTagMap.get(word) + "\n");
 					lineIndex++;
 
 				}
@@ -454,6 +489,43 @@ public class ClientAnnotator {
 		segmentation = new Segmentation();
 		rho = new RhoMeasure();
 
+	}
+
+	/**
+	 * encodes a string with special character to one with UTF-8 encoding
+	 * 
+	 * @param arg
+	 * @return
+	 */
+	public static String characterToUTF8(String arg) {
+		try {
+			if (arg == null)
+				return arg;
+			return URLEncoder.encode(arg, "UTF-8");
+		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
+		}
+		return arg;
+	}
+
+	/**
+	 * decodes a string with UTF-8 encoding to special character
+	 * 
+	 * @param arg
+	 * @return
+	 */
+	public static String utf8ToCharacter(String arg) {
+		try {
+			if (arg == null)
+				return arg;
+			return URLDecoder.decode(arg, "UTF-8");
+		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
+			e.printStackTrace();
+		} catch (IllegalArgumentException e2) {
+			e2.printStackTrace();
+		}
+		return arg;
 	}
 
 }
