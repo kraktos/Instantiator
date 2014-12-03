@@ -43,8 +43,7 @@ public class EntityCluster {
 		System.out.printf("loaded %d entities\n", entities.size());
 
 		// get a list of DBpedia concepts, in hierarchy
-		String[] dbpConcepts = new String[] { "Cartoon", "Film",
-				"TelevisionShow", "TelevisionEpisode", "TelevisionSeason" };
+		String[] dbpConcepts = new String[] { "Film" };
 
 		getDbpediaInstancesAndMatch(entities, dbpConcepts);
 
@@ -107,7 +106,7 @@ public class EntityCluster {
 
 		try {
 			writer = new BufferedWriter(new FileWriter(new File(
-					"/var/work/wiki/ENTITIES." + WINDOW + "." + prop)));
+					"ENTITIES." + WINDOW + "." + prop)));
 
 			long s = entities.size();
 			System.out.println(s);
@@ -169,21 +168,6 @@ public class EntityCluster {
 		try {
 			entitiies = FileUtils.readLines(new File(OIE_DATA_PATH), "UTF-8");
 
-			// for (String entity : entitiies) {
-
-			// builder = new StringBuilder();
-
-			// try {
-			// String words[] = entity.split(" ");
-			// for (String word : words) {
-			// String[] elem = word.split("\\#");
-			// builder.append(elem[0] + " ");
-			// }
-			// // System.out.println(entity + " \t " + builder.toString());
-			// returnVal.add(builder.toString());
-			// } catch (ArrayIndexOutOfBoundsException e) {
-			// }
-			// }
 		} catch (IOException e) {
 			e.printStackTrace();
 		}

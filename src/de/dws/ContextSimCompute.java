@@ -46,9 +46,9 @@ public class ContextSimCompute {
 	/**
 	 * path where the context scores for each entity are scored
 	 */
-	private static final String CONTEXT_SCORE_FILE = "sorted_wiki_ner_NER_WIKI_unpruned";// "sorted_wiki_ner_NER_WIKI__FreqSigLMI";
-																							// //
-																							// wiki_1000_ContextScores";
+	private static final String CONTEXT_SCORE_FILE = null;// "sorted_wiki_ner_NER_WIKI__FreqSigLMI";
+															// //
+															// wiki_1000_ContextScores";
 
 	/**
 	 * path of the normalized input file
@@ -104,7 +104,7 @@ public class ContextSimCompute {
 
 			if (!alreadyNormalised) {
 				System.out.println("Normalising" + filePath.toString());
-				normalise(dir);
+				normalise(filePath);
 			}
 
 			// generate an unique feature id for every feature
@@ -140,8 +140,33 @@ public class ContextSimCompute {
 				}
 			} else if (mode.equals("C")) {
 				// load the union of features
-				loadFeaturesForClass("Cartoon");
+				SparseVector unionVectCartoon = loadFeaturesForClass("Cartoon");
+
+				SparseVector unionVectTVShow = loadFeaturesForClass("TelevisionShow");
 				// loadFeaturesForClass("Film");
+
+				System.out
+						.println("Enter your query term. Press 'q' to quit entering");
+				// query now
+				BufferedReader console = new BufferedReader(
+						new InputStreamReader(System.in));
+				while (true) {
+					String scan = console.readLine().trim();
+					if (!scan.equalsIgnoreCase("q")) {
+						System.out.println("P(" + scan + "|cartoon)"
+								+ likelihood(scan, unionVectCartoon));
+						System.out.println("P(" + scan + "|TVShow)"
+								+ likelihood(scan, unionVectTVShow));
+					} else {
+						if (logger != null)
+							try {
+								logger.close();
+							} catch (IOException e) {
+								e.printStackTrace();
+							}
+						System.exit(1);
+					}
+				}
 
 			}
 		} else {
@@ -155,20 +180,68 @@ public class ContextSimCompute {
 		}
 	}
 
-	private static void loadFeaturesForClass(String conceptName) {
+	/**
+	 * load the union of features for a given concept
+	 * 
+	 * @param conceptName
+	 * @return
+	 */
+	private static ImmutableSparseVector loadFeaturesForClass(String conceptName) {
+
+		ImmutableSparseVector entVector = null;
+		ImmutableSparseVector unionVector = ImmutableSparseVector.empty();
 		try {
 			List<String> conceptInstances = FileUtils.readLines(new File(
-					"/var/work/wiki/Entities.4." + conceptName), "UTF-8");
+					"/home/adutta/git/Instantiator/src/ENTITIES.4."
+							+ conceptName), "UTF-8");
 
 			// for each of these instances of type conceptName, form an union of
 			// feature
 			for (String entity : conceptInstances) {
-				System.out.println(entity);
+				entity = entity.split("\t")[0];				
+				if (ENTITY_FEATURE_GLOBAL_MATRIX.containsKey(entity)) {
+					entVector = ENTITY_FEATURE_GLOBAL_MATRIX.get(entity);
+					unionVector = unionVector.combineWith(entVector);
+
+					System.out.printf("\nUnion vector has size %d\n",
+							unionVector.size());
+				}
+
 			}
 		} catch (IOException e) {
-
 			e.printStackTrace();
 		}
+
+		return unionVector;
+	}
+
+	/**
+	 * QUERY FOR ASKING TOP-K SIMILAR ENTITITES
+	 * 
+	 * @param queryTerm
+	 * @param unionVect
+	 * @param logger
+	 * @param dirPath
+	 * @return
+	 */
+	private static double likelihood(String queryTerm, SparseVector unionVect) {
+		double score = 0;
+
+		CosineVectorSimilarity cosineSim = new CosineVectorSimilarity();
+
+		System.out.printf("\n Likelihood estimate for %s \n", queryTerm);
+
+		// queryEntity = queryEntity.replaceAll(" ", "_");
+
+		ImmutableSparseVector entVector = ENTITY_FEATURE_GLOBAL_MATRIX
+				.get(queryTerm);
+
+		if (entVector == null) {
+			return 0;
+		}
+		score = (cosineSim.similarity(entVector, unionVect));
+
+		return score;
 
 	}
 
@@ -289,12 +362,14 @@ public class ContextSimCompute {
 		try {
 
 			set = new HashSet<String>();
-			br = new BufferedReader(new FileReader(contextScoreFileDir + "/"
-					+ CONTEXT_SCORE_FILE));
+			br = new BufferedReader(new FileReader(contextScoreFileDir));
 			long start = System.nanoTime();
 
-			BufferedWriter outputFile = new BufferedWriter(new FileWriter(
-					contextScoreFileDir + "/" + NORMALISED_OUTPUT));
+			File file = new File(contextScoreFileDir);
+			String dir = file.getParent();
+
+			BufferedWriter outputFile = new BufferedWriter(new FileWriter(dir
+					+ "/" + NORMALISED_OUTPUT));
 
 			while ((sCurrentLine = br.readLine()) != null) {
 				lineCntr++;
@@ -440,7 +515,6 @@ public class ContextSimCompute {
 								+ (System.nanoTime() - start) / FACTOR
 								+ " secds..");
 					}
-
 				} else {
 
 					try {
@@ -460,7 +534,6 @@ public class ContextSimCompute {
 					featureIdVsScore = new THashMap<Long, Double>();
 				}
 			}
-
 		} catch (FileNotFoundException e) {
 
 			e.printStackTrace();
@@ -495,7 +568,7 @@ public class ContextSimCompute {
 		// queryEntity = queryEntity.replaceAll(" ", "_");
 
 		entVector1 = ENTITY_FEATURE_GLOBAL_MATRIX.get(queryEntity);
-		
+
 		if (entVector1 == null) {
 			return null;
 		}
@@ -574,8 +647,6 @@ public class ContextSimCompute {
 		}
 
 		outputFile.close();
-
-		// 2071017
 
 		System.out.println("Processing Completed");
 
