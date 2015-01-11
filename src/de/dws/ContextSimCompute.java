@@ -82,7 +82,7 @@ public class ContextSimCompute {
 
 	private static final int TOPK = 15;
 
-	private static final String OIE_DATA_PATH = null;
+	private static String OIE_DATA_PATH = null;
 
 	private static String runType = null;
 	private static String mode = null;
@@ -94,13 +94,16 @@ public class ContextSimCompute {
 	@SuppressWarnings("resource")
 	public static void main(String[] args) throws Exception {
 		String filePath = null;
+		String entity = null;
 		BufferedWriter logger = null;
 
 		// writes the topic vs entity scores
 		BufferedWriter matrixWriter = null;
 
 		if (args.length == 3) {
+
 			filePath = args[0];
+			OIE_DATA_PATH = filePath;
 			runType = args[1];
 			mode = args[2];
 
@@ -148,39 +151,46 @@ public class ContextSimCompute {
 				}
 			} else if (mode.equals("C")) {
 				// load the union of features
-				SparseVector unionVectCartoon = loadFeaturesForClass("Cartoon");
+				SparseVector unionVectCartoon = loadFeaturesForClass(dir,
+						"Cartoon");
 				System.out.println("Loaded features fro topic Cartoon");
 
-				SparseVector unionVectTVShow = loadFeaturesForClass("TelevisionShow");
+				SparseVector unionVectTVShow = loadFeaturesForClass(dir,
+						"TelevisionShow");
 				System.out.println("Loaded features fro topic TelevisionShow");
 
-				SparseVector unionVectTVEpisode = loadFeaturesForClass("TelevisionEpisode");
+				SparseVector unionVectTVEpisode = loadFeaturesForClass(dir,
+						"TelevisionEpisode");
 				System.out
 						.println("Loaded features fro topic TelevisionEpisode");
 
-				SparseVector unionVectTVSeason = loadFeaturesForClass("TelevisionSeason");
+				SparseVector unionVectTVSeason = loadFeaturesForClass(dir,
+						"TelevisionSeason");
 				System.out
 						.println("Loaded features fro topic TelevisionSeason");
 
-				SparseVector unionVectFilm = loadFeaturesForClass("Film");
+				SparseVector unionVectFilm = loadFeaturesForClass(dir, "Film");
 				System.out.println("Loaded features fro topic Film");
 
 				// iteratively form a matrix of topics and entities
-				List<String> entities = loadNamedEntities();
+				// List<String> entities = loadNamedEntities();
 
 				// at this point dump the values in a file
 				matrixWriter = new BufferedWriter(new FileWriter(new File(dir
 						+ "/matrixScores.dat")));
 
-				System.out.println("Writing out the matrix");
+				System.out.println("Writing out the matrix..wait..");
 				matrixWriter
-						.write("\t	Cartoon	\t	TelevisionShow	\t	TelevisionEpisode	\t	TelevisionSeason	\t	Film \n");
-				for (String entity : entities) {
-					matrixWriter.write(entity + "\t"
-							+ likelihood(entity, unionVectCartoon) + "\t"
-							+ likelihood(entity, unionVectTVShow) + "\t"
-							+ likelihood(entity, unionVectTVEpisode) + "\t"
-							+ likelihood(entity, unionVectTVSeason) + "\t"
+						.write("\t\t	Cartoon	\t\t	TelevisionShow	\t\t	TelevisionEpisode	\t\t	TelevisionSeason	\t\t	Film \n");
+
+				for (Entry<String, ImmutableSparseVector> e : ENTITY_FEATURE_GLOBAL_MATRIX
+						.entrySet()) {
+					entity = e.getKey();
+					matrixWriter.write(entity + "\t\t"
+							+ likelihood(entity, unionVectCartoon) + "\t\t"
+							+ likelihood(entity, unionVectTVShow) + "\t\t"
+							+ likelihood(entity, unionVectTVEpisode) + "\t\t"
+							+ likelihood(entity, unionVectTVSeason) + "\t\t"
 							+ likelihood(entity, unionVectFilm) + "\n");
 
 					matrixWriter.flush();
@@ -232,31 +242,31 @@ public class ContextSimCompute {
 	 * @return
 	 */
 	public static List<String> loadNamedEntities() {
-		StringBuilder builder = null;
-		List<String> returnVal = new ArrayList<String>();
-		List<String> entitiies = null;
-		try {
-			entitiies = FileUtils.readLines(new File(OIE_DATA_PATH), "UTF-8");
 
-		} catch (IOException e) {
-			e.printStackTrace();
+		List<String> entitiies = new ArrayList<String>();
+		for (Entry<String, ImmutableSparseVector> e : ENTITY_FEATURE_GLOBAL_MATRIX
+				.entrySet()) {
+			entitiies.add(e.getKey());
 		}
+		// entitiies = FileUtils.readLines(new File(OIE_DATA_PATH), "UTF-8");
 		return entitiies;
 	}
 
 	/**
 	 * load the union of features for a given concept
 	 * 
-	 * @param conceptName
+	 * @param dir
+	 * @param string
 	 * @return
 	 */
-	private static ImmutableSparseVector loadFeaturesForClass(String conceptName) {
+	private static ImmutableSparseVector loadFeaturesForClass(String dir,
+			String cName) {
 
 		ImmutableSparseVector entVector = null;
 		ImmutableSparseVector unionVector = ImmutableSparseVector.empty();
 		try {
-			List<String> conceptInstances = FileUtils.readLines(new File(
-					"ENTITIES.4." + conceptName), "UTF-8");
+			List<String> conceptInstances = FileUtils.readLines(new File(dir
+					+ "/ENTITIES.4." + cName), "UTF-8");
 
 			// for each of these instances of type conceptName, form an union of
 			// feature
@@ -293,7 +303,7 @@ public class ContextSimCompute {
 
 		CosineVectorSimilarity cosineSim = new CosineVectorSimilarity();
 
-		System.out.printf("\n Likelihood estimate for %s \n", queryTerm);
+		// System.out.printf("\n Likelihood estimate for %s \n", queryTerm);
 
 		// queryEntity = queryEntity.replaceAll(" ", "_");
 
@@ -305,8 +315,7 @@ public class ContextSimCompute {
 		}
 		score = (cosineSim.similarity(entVector, unionVect));
 
-		return score;
-
+		return (double) Math.round(score * 10000000) / 10000000;
 	}
 
 	/**
