@@ -96,6 +96,9 @@ public class ContextSimCompute {
 		String filePath = null;
 		BufferedWriter logger = null;
 
+		// writes the topic vs entity scores
+		BufferedWriter matrixWriter = null;
+
 		if (args.length == 3) {
 			filePath = args[0];
 			runType = args[1];
@@ -146,23 +149,44 @@ public class ContextSimCompute {
 			} else if (mode.equals("C")) {
 				// load the union of features
 				SparseVector unionVectCartoon = loadFeaturesForClass("Cartoon");
+				System.out.println("Loaded features fro topic Cartoon");
 
 				SparseVector unionVectTVShow = loadFeaturesForClass("TelevisionShow");
-				// loadFeaturesForClass("Film");
+				System.out.println("Loaded features fro topic TelevisionShow");
 
 				SparseVector unionVectTVEpisode = loadFeaturesForClass("TelevisionEpisode");
+				System.out
+						.println("Loaded features fro topic TelevisionEpisode");
 
 				SparseVector unionVectTVSeason = loadFeaturesForClass("TelevisionSeason");
+				System.out
+						.println("Loaded features fro topic TelevisionSeason");
 
 				SparseVector unionVectFilm = loadFeaturesForClass("Film");
+				System.out.println("Loaded features fro topic Film");
 
 				// iteratively form a matrix of topics and entities
 				List<String> entities = loadNamedEntities();
 
-				for (String entity : entities) {
+				// at this point dump the values in a file
+				matrixWriter = new BufferedWriter(new FileWriter(new File(dir
+						+ "/matrixScores.dat")));
 
+				System.out.println("Writing out the matrix");
+				matrixWriter
+						.write("\t	Cartoon	\t	TelevisionShow	\t	TelevisionEpisode	\t	TelevisionSeason	\t	Film \n");
+				for (String entity : entities) {
+					matrixWriter.write(entity + "\t"
+							+ likelihood(entity, unionVectCartoon) + "\t"
+							+ likelihood(entity, unionVectTVShow) + "\t"
+							+ likelihood(entity, unionVectTVEpisode) + "\t"
+							+ likelihood(entity, unionVectTVSeason) + "\t"
+							+ likelihood(entity, unionVectFilm) + "\n");
+
+					matrixWriter.flush();
 				}
 
+				matrixWriter.close();
 				System.out
 						.println("Enter your query term. Press 'q' to quit entering");
 				// query now
