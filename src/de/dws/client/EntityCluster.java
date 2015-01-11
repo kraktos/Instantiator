@@ -161,7 +161,7 @@ public class EntityCluster {
 	 * 
 	 * @return
 	 */
-	private static List<String> loadNamedEntities() {
+	public static List<String> loadNamedEntities() {
 		StringBuilder builder = null;
 		List<String> returnVal = new ArrayList<String>();
 		List<String> entitiies = null;

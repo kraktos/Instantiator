@@ -13,6 +13,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -28,6 +29,8 @@ import org.grouplens.lenskit.vectors.MutableSparseVector;
 import org.grouplens.lenskit.vectors.SparseVector;
 import org.grouplens.lenskit.vectors.VectorEntry;
 import org.grouplens.lenskit.vectors.similarity.CosineVectorSimilarity;
+
+import de.dws.client.EntityCluster;
 
 /**
  * @author adutta
@@ -78,6 +81,8 @@ public class ContextSimCompute {
 	private static final String LINEBREAKER = "~~~~";
 
 	private static final int TOPK = 15;
+
+	private static final String OIE_DATA_PATH = null;
 
 	private static String runType = null;
 	private static String mode = null;
@@ -145,6 +150,19 @@ public class ContextSimCompute {
 				SparseVector unionVectTVShow = loadFeaturesForClass("TelevisionShow");
 				// loadFeaturesForClass("Film");
 
+				SparseVector unionVectTVEpisode = loadFeaturesForClass("TelevisionEpisode");
+
+				SparseVector unionVectTVSeason = loadFeaturesForClass("TelevisionSeason");
+
+				SparseVector unionVectFilm = loadFeaturesForClass("Film");
+
+				// iteratively form a matrix of topics and entities
+				List<String> entities = loadNamedEntities();
+
+				for (String entity : entities) {
+
+				}
+
 				System.out
 						.println("Enter your query term. Press 'q' to quit entering");
 				// query now
@@ -153,10 +171,14 @@ public class ContextSimCompute {
 				while (true) {
 					String scan = console.readLine().trim();
 					if (!scan.equalsIgnoreCase("q")) {
-						System.out.println("P(" + scan + "|cartoon)"
+						System.out.println("P(cartoon | " + scan + ")"
 								+ likelihood(scan, unionVectCartoon));
-						System.out.println("P(" + scan + "|TVShow)"
+
+						System.out.println("P(TVShow | " + scan + ")"
 								+ likelihood(scan, unionVectTVShow));
+
+						System.out.println("P(TVEpisode | " + scan + ")"
+								+ likelihood(scan, unionVectTVEpisode));
 					} else {
 						if (logger != null)
 							try {
@@ -172,12 +194,30 @@ public class ContextSimCompute {
 		} else {
 			System.err.println("add input file path...");
 			System.err
-					.println("Usage: java -Xmx20G -jar entitySimInteractive.jar  <path> <type> <mode>");
+					.println("Usage: java -Xmx4G -jar entitySimInteractive.jar  <path> <type> <mode>");
 			System.err
-					.println("ex: java -Xmx20G -jar entitySimInteractive.jar  /data/sorted LMI Q");
+					.println("ex: java -Xmx4G -jar entitySimInteractive.jar  /data/sorted LMI Q");
 			System.err
-					.println("ex: java -Xmx20G -jar entitySimInteractive.jar  /data/sorted LMI C");
+					.println("ex: java -Xmx4G -jar entitySimInteractive.jar  /data/sorted LMI C");
 		}
+	}
+
+	/**
+	 * load the set of input entities
+	 * 
+	 * @return
+	 */
+	public static List<String> loadNamedEntities() {
+		StringBuilder builder = null;
+		List<String> returnVal = new ArrayList<String>();
+		List<String> entitiies = null;
+		try {
+			entitiies = FileUtils.readLines(new File(OIE_DATA_PATH), "UTF-8");
+
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return entitiies;
 	}
 
 	/**
@@ -192,21 +232,21 @@ public class ContextSimCompute {
 		ImmutableSparseVector unionVector = ImmutableSparseVector.empty();
 		try {
 			List<String> conceptInstances = FileUtils.readLines(new File(
-					"/home/adutta/git/Instantiator/src/ENTITIES.4."
-							+ conceptName), "UTF-8");
+					"ENTITIES.4." + conceptName), "UTF-8");
 
 			// for each of these instances of type conceptName, form an union of
 			// feature
 			for (String entity : conceptInstances) {
-				entity = entity.split("\t")[0];				
+				entity = entity.split("\t")[0];
 				if (ENTITY_FEATURE_GLOBAL_MATRIX.containsKey(entity)) {
 					entVector = ENTITY_FEATURE_GLOBAL_MATRIX.get(entity);
 					unionVector = unionVector.combineWith(entVector);
 
-					System.out.printf("\nUnion vector has size %d\n",
-							unionVector.size());
+					if (unionVector.size() % 10000 == 0
+							&& unionVector.size() > 10000)
+						System.out.printf("\nUnion vector has size %d\n",
+								unionVector.size());
 				}
-
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -506,8 +546,10 @@ public class ContextSimCompute {
 					normScore = Double.parseDouble(line[2]);
 
 					// put the feature id and feature score
-					featureIdVsScore.put(GLOBAL_FEATURE_KEYS.get(contextFeature
-							.toLowerCase()), normScore);
+					if (GLOBAL_FEATURE_KEYS.containsKey(contextFeature
+							.toLowerCase()))
+						featureIdVsScore.put(GLOBAL_FEATURE_KEYS
+								.get(contextFeature.toLowerCase()), normScore);
 
 					if (lineCntr % BATCH == 0 && lineCntr > BATCH) {
 						System.out.println("Time to create matrix = "
