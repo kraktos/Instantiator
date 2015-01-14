@@ -181,16 +181,16 @@ public class ContextSimCompute {
 
 				System.out.println("Writing out the matrix..wait..");
 				matrixWriter
-						.write("\t\t	Cartoon	\t\t	TelevisionShow	\t\t	TelevisionEpisode	\t\t	TelevisionSeason	\t\t	Film \n");
+						.write("\t\t	Cartoon	\t	TelevisionShow	\t	TelevisionEpisode	\t	TelevisionSeason	\t	Film \n");
 
 				for (Entry<String, ImmutableSparseVector> e : ENTITY_FEATURE_GLOBAL_MATRIX
 						.entrySet()) {
 					entity = e.getKey();
-					matrixWriter.write(entity + "\t\t"
-							+ likelihood(entity, unionVectCartoon) + "\t\t"
-							+ likelihood(entity, unionVectTVShow) + "\t\t"
-							+ likelihood(entity, unionVectTVEpisode) + "\t\t"
-							+ likelihood(entity, unionVectTVSeason) + "\t\t"
+					matrixWriter.write(entity + "\t"
+							+ likelihood(entity, unionVectCartoon) + "\t"
+							+ likelihood(entity, unionVectTVShow) + "\t"
+							+ likelihood(entity, unionVectTVEpisode) + "\t"
+							+ likelihood(entity, unionVectTVSeason) + "\t"
 							+ likelihood(entity, unionVectFilm) + "\n");
 
 					matrixWriter.flush();

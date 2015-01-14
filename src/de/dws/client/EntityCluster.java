@@ -62,27 +62,27 @@ public class EntityCluster {
 
 		String instance = null;
 		String QUERY = null;
-		List<String> props = null;
+		List<String> propInstances = null;
 
 		for (String prop : dbpProperties) {
 			QUERY = "SELECT * WHERE {?s <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/"
 					+ prop + ">}";
 			List<QuerySolution> results = queryDBPediaEndPoint(QUERY);
-			props = new ArrayList<String>();
+			propInstances = new ArrayList<String>();
 			for (QuerySolution querySol : results) {
 				instance = querySol.get("s").toString();
 				instance = StringUtils.replace(instance,
 						"http://dbpedia.org/resource/", "");
 				instance = instance.replaceAll("_+", " ");
 
-				props.add(instance);
+				propInstances.add(instance);
 			}
 
 			System.out.printf("Found %d DBpedia instances for %s",
-					props.size(), prop);
+					propInstances.size(), prop);
 
 			// for the the list of instances, find match in the input data
-			findMatches(entities, props, prop);
+			findMatches(entities, propInstances, prop);
 		}
 	}
 
