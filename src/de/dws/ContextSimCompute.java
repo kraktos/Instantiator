@@ -82,6 +82,9 @@ public class ContextSimCompute {
 
 	private static final int TOPK = 15;
 
+	private static String k = null;
+	private static long TOPK_LMI = 0;
+
 	private static String OIE_DATA_PATH = null;
 
 	private static String runType = null;
@@ -100,18 +103,19 @@ public class ContextSimCompute {
 		// writes the topic vs entity scores
 		BufferedWriter matrixWriter = null;
 
-		if (args.length == 3) {
+		if (args.length == 4) {
 
 			filePath = args[0];
 			OIE_DATA_PATH = filePath;
 			runType = args[1];
 			mode = args[2];
+			TOPK_LMI = Long.parseLong(args[3]);
 
 			File file = new File(filePath);
 			String dir = file.getParent();
 
 			logger = new BufferedWriter(new FileWriter(new File(dir
-					+ "/overlap.log")));
+					+ "/overlap." + TOPK_LMI + ".log")));
 
 			if (!alreadyNormalised) {
 				System.out.println("Normalising" + filePath.toString());
@@ -123,8 +127,8 @@ public class ContextSimCompute {
 			generateFeatureKeys(filePath);
 
 			System.out.println("Creating Feature Matrix from "
-					+ NORMALISED_OUTPUT.toString());
-			loadContexts(dir + "/" + NORMALISED_OUTPUT);
+					+ (NORMALISED_OUTPUT + TOPK_LMI).toString());
+			loadContexts(dir + "/" + NORMALISED_OUTPUT + TOPK_LMI);
 
 			// once loaded, find pairwise entity similarity
 			// findContextSimilarityScore();
@@ -172,16 +176,21 @@ public class ContextSimCompute {
 				SparseVector unionVectFilm = loadFeaturesForClass(dir, "Film");
 				System.out.println("Loaded features fro topic Film");
 
-				// iteratively form a matrix of topics and entities
-				// List<String> entities = loadNamedEntities();
+				// debug point to see the feature vectors
+				printFeatures(unionVectCartoon, logger, "Cartoon");
+				printFeatures(unionVectTVShow, logger, "TelevisionShow");
+				printFeatures(unionVectTVEpisode, logger, "TelevisionEpisode");
+				printFeatures(unionVectTVSeason, logger, "TelevisionSeason");
+				printFeatures(unionVectFilm, logger, "Film");
 
 				// at this point dump the values in a file
+
 				matrixWriter = new BufferedWriter(new FileWriter(new File(dir
-						+ "/matrixScores.dat")));
+						+ "/matrixScores." + TOPK_LMI + ".dat")));
 
 				System.out.println("Writing out the matrix..wait..");
 				matrixWriter
-						.write("\t\t	Cartoon	\t	TelevisionShow	\t	TelevisionEpisode	\t	TelevisionSeason	\t	Film \n");
+						.write("\t	Cartoon	\t	TelevisionShow	\t	TelevisionEpisode	\t	TelevisionSeason	\t	Film \n");
 
 				for (Entry<String, ImmutableSparseVector> e : ENTITY_FEATURE_GLOBAL_MATRIX
 						.entrySet()) {
@@ -195,6 +204,54 @@ public class ContextSimCompute {
 
 					matrixWriter.flush();
 				}
+
+				CosineVectorSimilarity cosineSim = new CosineVectorSimilarity();
+				System.out.println("Film vs Cartoon "
+						+ (cosineSim
+								.similarity(unionVectFilm, unionVectCartoon)));
+
+				System.out.println("TelevisionEpisode vs Cartoon "
+						+ (cosineSim.similarity(unionVectTVEpisode,
+								unionVectCartoon)));
+
+				System.out.println("TelevisionShow vs Cartoon "
+						+ (cosineSim.similarity(unionVectTVShow,
+								unionVectCartoon)));
+
+				System.out.println("TelevisionSeason vs Cartoon "
+						+ (cosineSim.similarity(unionVectTVSeason,
+								unionVectCartoon)));
+
+				// =============================================================
+
+				System.out.println("TelevisionSeason vs TelevisionShow "
+						+ (cosineSim.similarity(unionVectTVSeason,
+								unionVectTVShow)));
+
+				System.out.println("TelevisionSeason vs TelevisionEpisode "
+						+ (cosineSim.similarity(unionVectTVSeason,
+								unionVectTVEpisode)));
+
+				System.out.println("TelevisionShow vs TelevisionEpisode "
+						+ (cosineSim.similarity(unionVectTVEpisode,
+								unionVectTVShow)));
+
+				// ==============================================================
+
+				System.out.println("TelevisionEpisode vs Film "
+						+ (cosineSim.similarity(unionVectTVEpisode,
+								unionVectFilm)));
+
+				System.out
+						.println("TelevisionShow vs Film "
+								+ (cosineSim.similarity(unionVectTVShow,
+										unionVectFilm)));
+
+				System.out.println("TelevisionSeason vs Film "
+						+ (cosineSim.similarity(unionVectTVSeason,
+								unionVectFilm)));
+
+				// =============================================================
 
 				matrixWriter.close();
 				System.out
@@ -223,7 +280,6 @@ public class ContextSimCompute {
 						System.exit(1);
 					}
 				}
-
 			}
 		} else {
 			System.err.println("add input file path...");
@@ -233,6 +289,30 @@ public class ContextSimCompute {
 					.println("ex: java -Xmx4G -jar entitySimInteractive.jar  /data/sorted LMI Q");
 			System.err
 					.println("ex: java -Xmx4G -jar entitySimInteractive.jar  /data/sorted LMI C");
+		}
+	}
+
+	/**
+	 * print out the features needed for debugging
+	 * 
+	 * @param featureVector
+	 * @param logger
+	 * @param identifier
+	 */
+	private static void printFeatures(SparseVector featureVector,
+			BufferedWriter logger, String identifier) {
+
+		try {
+			logger.write("\n\n ================ " + identifier
+					+ "  =================\n\n ");
+
+			for (VectorEntry vect : featureVector) {
+				logger.write(GLOBAL_FEATURE_KEYS_INV.get(vect.getKey()) + ",\t");
+			}
+			logger.flush();
+
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
 	}
 
@@ -350,7 +430,6 @@ public class ContextSimCompute {
 								+ "\t");
 					}
 					logger.write("\n ============================================= \n");
-
 				}
 				logger.flush();
 			} else {
@@ -392,6 +471,8 @@ public class ContextSimCompute {
 						if (!GLOBAL_FEATURE_KEYS.containsKey(feature
 								.toLowerCase())) {
 							GLOBAL_FEATURE_KEYS.put(feature.toLowerCase(), pos);
+							GLOBAL_FEATURE_KEYS_INV.put(pos,
+									feature.toLowerCase());
 							pos++;
 						}
 					}
@@ -427,6 +508,7 @@ public class ContextSimCompute {
 		double featureCount = 0;
 		String[] line = null;
 		long lineCntr = 0;
+		long tCntr = 0;
 		HashSet<String> set = null;
 		double maxValue = 0;
 		double oldValue = 0;
@@ -442,7 +524,7 @@ public class ContextSimCompute {
 			String dir = file.getParent();
 
 			BufferedWriter outputFile = new BufferedWriter(new FileWriter(dir
-					+ "/" + NORMALISED_OUTPUT));
+					+ "/" + NORMALISED_OUTPUT + TOPK_LMI));
 
 			while ((sCurrentLine = br.readLine()) != null) {
 				lineCntr++;
@@ -463,12 +545,14 @@ public class ContextSimCompute {
 						maxValue = lmiScore;
 						// reset rank
 						rank = 0;
+						// reset counter
+						tCntr = 0;
 					}
 
 					// if (feature.equals("trigram#the#@#Darlington"))
 					// System.out.println();
 
-					if (shouldWriteOut(feature)) {
+					if (shouldWriteOut(feature) && tCntr++ < TOPK_LMI) {
 						// case based normalization
 						if (runType.equals(SIM_TYPE.RANKING.toString())) {
 							if (lmiScore != oldValue)
@@ -508,6 +592,7 @@ public class ContextSimCompute {
 				}
 			}
 
+			outputFile.flush();
 			outputFile.close();
 
 		} catch (FileNotFoundException e) {
